@@ -10,6 +10,10 @@ DATOS SEGMENT
     dificultad    db 0 ; 1=Facil, 2=Intermedio, 3=Dificil
     modo_juego    db 0 ; 1=Tiempo
     
+    ; --- Variables para el HUD ---
+    puntaje1        dw 0
+    tiempo_restante dw 0 ; Se inicializa en 0, se actualiza dinámicamente
+
     ; --- Constantes y Datos Comunes ---
     SCREEN_WIDTH    EQU 80
     SCREEN_HEIGHT   EQU 25
@@ -48,13 +52,12 @@ DATOS SEGMENT
     _number_chars   DB '0123456789'
     _num_seq_buffer DB TOTAL_PRINT_LENGTH DUP ('$')
 
-    ; --- [NUEVO-CLR] Constantes y Datos para Colores ---
+    ; --- Constantes y Datos para Colores ---
     COLOR_PALETTE_SIZE  EQU 15
-    COLOR_SEQ_LENGTH    EQU 5
     prng_seed   DW  ?
     color_palette   DB  1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7, 1
       
-        ; --- Constantes de Dificultad ---
+    ; --- Constantes de Dificultad ---
     COLOR_SEQ_LENGTH_EASY   EQU 5
     COLOR_SEQ_LENGTH_MED    EQU 8
     COLOR_SEQ_LENGTH_HARD   EQU 12
@@ -68,12 +71,11 @@ DATOS SEGMENT
     NUMBER_SEQ_LENGTH_HARD  EQU 14
     
     ; Tiempos de pausa en microsegundos para INT 15h, AH=86h
-    ; Formato: CX (high word), DX (low word)
     time_delays_h   DW 13h,   0Bh,   03h
     time_delays_l   DW 12D0h, 71B0h, 0D480h 
-    ; Fácil:    1.25 segundos
-    ; Medio:    0.75 segundos
-    ; Difícil:  0.25 segundos
+
+    ; Tiempos iniciales por dificultad (en segundos)
+    tiempos_iniciales   dw 10, 7, 5 ; Facil, Intermedio, Dificil
     
 DATOS ENDS
 
@@ -100,54 +102,51 @@ Main_Game_Loop PROC NEAR
     CALL Initial_Setup_Players
     CALL Configure_Game_Settings
     
+    CALL Dibujar_HUD
+                   
+    CALL Mostrar_Contador
+                   
     CMP tipo_juego, 1
-    JE jugar_colores  
-
+    JE jugar_colores_main
     CMP tipo_juego, 2
-    JE jugar_emojis   
-
+    JE jugar_emojis_main
     CMP tipo_juego, 3
-    JE jugar_numeros  
-
+    JE jugar_numeros_main
     JMP fin_del_juego
 
-jugar_colores:
+jugar_colores_main:
     CALL Jugar_Secuencia_Colores
-    JMP fin_del_juego
+    JMP post_secuencia
 
-jugar_emojis:
+jugar_emojis_main:
     CALL Jugar_Secuencia_Emojis
-    JMP fin_del_juego
+    JMP post_secuencia
 
-jugar_numeros:
+jugar_numeros_main:
     CALL MostrarSecuenciaNumeros
-    JMP fin_del_juego
-    
+
+post_secuencia:
+    CALL Dibujar_HUD
+    MOV AH, 00h
+    INT 16h
+
 fin_del_juego:    
     RET
 Main_Game_Loop ENDP
 
-; =======================================================
-; [NUEVO] LÓGICA DEL JUEGO DE COLORES
-; =======================================================
 Jugar_Secuencia_Colores PROC NEAR
     PUSHA
-
-    ; Inicializar semilla y modo de video
     MOV AH, 2Ch
     INT 21h
     MOV [prng_seed], DX
     MOV AH, 00h
     MOV AL, 03h
     INT 10h
-
-    ; --- [CORREGIDO] Seleccionar longitud de secuencia basado en dificultad ---
-    MOV CH, 0 ; Limpiamos la parte alta de CX
+    MOV CH, 0
     CMP dificultad, 1
     JE  easy_len_color
     CMP dificultad, 2
     JE  medium_len_color
-    
 hard_len_color:
     MOV CL, COLOR_SEQ_LENGTH_HARD
     JMP start_color_loop
@@ -156,13 +155,9 @@ medium_len_color:
     JMP start_color_loop
 easy_len_color:
     MOV CL, COLOR_SEQ_LENGTH_EASY
-
 start_color_loop:
-    ; Bucle principal de la secuencia
 color_sequence_loop:
     PUSH CX
-    
-    ; Obtener color aleatorio
     MOV AX, [prng_seed]
     MOV BX, 12345
     MUL BX
@@ -174,8 +169,6 @@ color_sequence_loop:
     LEA SI, color_palette
     ADD SI, DX
     MOV BL, [SI]
-
-    ; Mostrar flash de color
     MOV BH, BL
     SHL BH, 4
     MOV AH, 06h
@@ -185,46 +178,33 @@ color_sequence_loop:
     MOV DH, 24
     MOV DL, 79
     INT 10h
-
-    ; --- [CORREGIDO] Pausa para memorizar usando una tabla ---
     MOV AL, dificultad
-    DEC AL          ; Convertir dificultad 1,2,3 a índice 0,1,2
+    DEC AL
     MOV AH, 0
-    SHL AX, 1       ; Multiplicar por 2 (porque los valores son Words)
-    MOV BX, AX      ; Usar BX como índice
-
-    MOV CX, [time_delays_h + BX]  ; Cargar parte alta del tiempo
-    MOV DX, [time_delays_l + BX]  ; Cargar parte baja del tiempo
+    SHL AX, 1
+    MOV BX, AX
+    MOV CX, [time_delays_h + BX]
+    MOV DX, [time_delays_l + BX]
     MOV AH, 86h
-    INT 15h         ; Ejecutar la pausa
-    
-    ; Pantalla en negro entre colores
+    INT 15h
     MOV BH, 00h
     MOV AH, 06h
     MOV AL, 0
     MOV CX, 0
     MOV DX, 184Fh
     INT 10h
-    MOV CX, 03h      ; Pausa corta fija entre colores
+    MOV CX, 03h
     MOV DX, 0D480h
     MOV AH, 86h
     INT 15h
-
     POP CX
     LOOP color_sequence_loop
-
-    ; Esperar tecla al final (temporal)
-    MOV AH, 00h
-    INT 16h
-    
     POPA
     RET
 Jugar_Secuencia_Colores ENDP
 
 Jugar_Secuencia_Emojis PROC NEAR
     PUSHA
-
-    ; Limpiar pantalla inicial
     MOV AH, 00h
     MOV AL, 03h
     INT 10h
@@ -234,8 +214,6 @@ Jugar_Secuencia_Emojis PROC NEAR
     MOV CX, 0
     MOV DX, 184Fh
     INT 10h
-
-    ; --- Seleccionar longitud de secuencia ---
     CMP dificultad, 1
     JE  easy_len_emoji
     CMP dificultad, 2
@@ -248,12 +226,9 @@ medium_len_emoji:
     JMP start_emoji_loop
 easy_len_emoji:
     MOV CX, EMOJI_SEQ_LENGTH_EASY
-    
 start_emoji_loop:
 emoji_sequence_loop:
     PUSH CX
-
-    ; --- Generar UN emoji aleatorio ---
     MOV AH, 2Ch
     INT 21h
     MOV AL, DL
@@ -266,55 +241,105 @@ emoji_sequence_loop:
     LEA SI, emoji_pointers
     ADD SI, BX
     MOV SI, [SI]
-
-    ; --- Mostrar ESE emoji en el centro ---
-    ; Centrar cursor en la pantalla
-    MOV DL, 38  ; Columna aproximada para centrar
-    MOV DH, 12  ; Fila central
+    MOV DL, 38
+    MOV DH, 12
     MOV AH, 02h
     MOV BH, 0
     INT 10h
-    ; Imprimir el emoji
     CALL Print_Single_Emoji_From_SI
-
-    ; --- Pausa para memorizar ---
     MOV AL, dificultad
-    DEC AL          
+    DEC AL
     MOV AH, 0
-    SHL AX, 1       
-    MOV BX, AX      
+    SHL AX, 1
+    MOV BX, AX
     MOV CX, [time_delays_h + BX]
     MOV DX, [time_delays_l + BX]
     MOV AH, 86h
     INT 15h
-
-    ; --- Limpiar la pantalla para el siguiente emoji ---
     MOV AH, 06h
     MOV AL, 0
     MOV BH, 07h
     MOV CX, 0
     MOV DX, 184Fh
     INT 10h
-    
-    ; Pausa corta entre elementos
     MOV CX, 01h
-    MOV DX, 86A0h ; 100,000 us (0.1s)
+    MOV DX, 86A0h
     MOV AH, 86h
     INT 15h
-
     POP CX
     LOOP emoji_sequence_loop
-
-    ; Esperar tecla al final
-    MOV AH, 0
-    INT 16h
     POPA
     RET
 Jugar_Secuencia_Emojis ENDP
 
+MostrarSecuenciaNumeros PROC
+    PUSHA
+    MOV AH, 00h
+    MOV AL, 03h
+    INT 10h
+    MOV AH, 06h
+    MOV AL, 0
+    MOV BH, 07h
+    MOV CX, 0
+    MOV DX, 184Fh
+    INT 10h
+    CMP dificultad, 1
+    JE  easy_len_num
+    CMP dificultad, 2
+    JE  medium_len_num
+hard_len_num:
+    MOV CX, NUMBER_SEQ_LENGTH_HARD
+    JMP start_num_loop
+medium_len_num:
+    MOV CX, NUMBER_SEQ_LENGTH_MED
+    JMP start_num_loop
+easy_len_num:
+    MOV CX, NUMBER_SEQ_LENGTH_EASY
+start_num_loop:
+num_sequence_loop:
+    PUSH CX
+    MOV AH, 2Ch
+    INT 21h
+    MOV AL, DL
+    MOV AH, 0
+    MOV BL, NUMBER_COUNT
+    DIV BL
+    MOV AL, AH
+    ADD AL, '0'
+    MOV DL, 39
+    MOV DH, 12
+    MOV AH, 02h
+    MOV BH, 0
+    INT 10h
+    MOV AH, 0Eh
+    MOV BL, 0Eh
+    INT 10h
+    MOV AL, dificultad
+    DEC AL
+    MOV AH, 0
+    SHL AX, 1
+    MOV BX, AX
+    MOV CX, [time_delays_h + BX]
+    MOV DX, [time_delays_l + BX]
+    MOV AH, 86h
+    INT 15h
+    MOV AH, 06h
+    MOV AL, 0
+    MOV BH, 07h
+    MOV CX, 0
+    MOV DX, 184Fh
+    INT 10h
+    MOV CX, 01h
+    MOV DX, 86A0h
+    MOV AH, 86h
+    INT 15h
+    POP CX
+    LOOP num_sequence_loop
+    POPA
+    RET
+MostrarSecuenciaNumeros ENDP
+
 Print_Single_Emoji_From_SI PROC NEAR
-    ; Procedimiento auxiliar para imprimir un emoji (null-terminated)
-    ; Recibe el puntero en SI
     PUSH AX
     PUSH SI
 print_emoji_char:
@@ -330,94 +355,6 @@ end_print_emoji:
     POP AX
     RET
 Print_Single_Emoji_From_SI ENDP
-
-MostrarSecuenciaNumeros PROC
-    PUSHA 
-    
-    ; Limpiar pantalla inicial
-    MOV AH, 00h
-    MOV AL, 03h
-    INT 10h
-    MOV AH, 06h
-    MOV AL, 0
-    MOV BH, 07h
-    MOV CX, 0
-    MOV DX, 184Fh
-    INT 10h
-
-    ; --- Seleccionar longitud de secuencia ---
-    CMP dificultad, 1
-    JE  easy_len_num
-    CMP dificultad, 2
-    JE  medium_len_num
-hard_len_num:
-    MOV CX, NUMBER_SEQ_LENGTH_HARD
-    JMP start_num_loop
-medium_len_num:
-    MOV CX, NUMBER_SEQ_LENGTH_MED
-    JMP start_num_loop
-easy_len_num:
-    MOV CX, NUMBER_SEQ_LENGTH_EASY
-    
-start_num_loop:
-num_sequence_loop:
-    PUSH CX
-
-    ; --- Generar UN número aleatorio ---
-    MOV AH, 2Ch
-    INT 21h
-    MOV AL, DL
-    MOV AH, 0
-    MOV BL, NUMBER_COUNT
-    DIV BL
-    MOV AL, AH      ; El número aleatorio (0-9) queda en AL
-    ADD AL, '0'     ; Convertir a caracter ASCII
-
-    ; --- Mostrar ESE número en el centro ---
-    MOV DL, 39      ; Columna central
-    MOV DH, 12      ; Fila central
-    MOV AH, 02h
-    MOV BH, 0
-    INT 10h
-    ; Imprimir el número
-    MOV AH, 0Eh
-    MOV BL, 0Eh     ; Color amarillo
-    INT 10h
-
-    ; --- Pausa para memorizar ---
-    MOV AL, dificultad
-    DEC AL          
-    MOV AH, 0
-    SHL AX, 1       
-    MOV BX, AX      
-    MOV CX, [time_delays_h + BX]
-    MOV DX, [time_delays_l + BX]
-    MOV AH, 86h
-    INT 15h
-
-    ; --- Limpiar la pantalla para el siguiente número ---
-    MOV AH, 06h
-    MOV AL, 0
-    MOV BH, 07h
-    MOV CX, 0
-    MOV DX, 184Fh
-    INT 10h
-    
-    ; Pausa corta entre elementos
-    MOV CX, 01h
-    MOV DX, 86A0h ; 100,000 us (0.1s)
-    MOV AH, 86h
-    INT 15h
-
-    POP CX
-    LOOP num_sequence_loop
-
-    ; Esperar tecla al final
-    MOV AH, 0
-    INT 16h
-    POPA
-    RET
-MostrarSecuenciaNumeros ENDP
 
 Initial_Setup_Players PROC NEAR
     PRINTN "BIENVENIDO A SIMON DICE"
@@ -562,10 +499,133 @@ invalid_difficulty:
 set_time_mode:
     MOV modo_juego, 1
 config_done:
+    CALL Actualizar_Tiempo_Inicial
     PRINTN ""
     PRINTN "--- Configuracion guardada. Preparando el juego... ---"
     RET
 Configure_Game_Settings ENDP    
 
+Actualizar_Tiempo_Inicial PROC NEAR
+    PUSHA
+    MOV AL, [dificultad]
+    DEC AL
+    MOV AH, 0
+    SHL AX, 1
+    MOV BX, AX
+    MOV AX, [tiempos_iniciales + BX]
+    MOV [tiempo_restante], AX
+    POPA
+    RET
+Actualizar_Tiempo_Inicial ENDP
+
+; =======================================================
+;         PROCEDIMIENTO PARA DIBUJAR EL HUD (NUEVO ESTILO)
+; =======================================================
+Dibujar_HUD PROC NEAR
+    PUSHA
+
+    ; --- 1. Limpiar la pantalla ---
+    MOV AH, 06h
+    MOV AL, 0
+    MOV BH, 07h     ; Fondo Negro, Texto Gris
+    MOV CX, 0000
+    MOV DX, 184Fh
+    INT 10h
+
+    ; --- [MODIFICADO] Dibujar el recuadro con '_' y '|' ---
+    ; Línea horizontal superior
+    GOTOXY 0, 0
+    MOV CX, 26
+    top_line:
+        PUTC '_'
+    LOOP top_line
+    
+    ; Líneas verticales
+    GOTOXY 0, 1
+    PUTC '|'
+    GOTOXY 25, 1
+    PUTC '|'
+    GOTOXY 0, 2
+    PUTC '|'
+    GOTOXY 25, 2
+    PUTC '|'
+    GOTOXY 0, 3
+    PUTC '|'
+    GOTOXY 25, 3
+    PUTC '|'
+    
+    ; Línea horizontal inferior
+    GOTOXY 0, 4
+    MOV CX, 26
+    bottom_line:
+        PUTC '_'
+    LOOP bottom_line
+    
+    ; --- 3. Imprimir la información (sin cambios) ---
+    GOTOXY 2, 1
+    PRINT "Jugador 1: "
+    GOTOXY 2, 2
+    PRINT "Puntaje: "
+    GOTOXY 2, 3
+    PRINT "Tiempo: "
+
+    GOTOXY 13, 1
+    MOV DX, OFFSET nickname1
+    MOV AH, 09h
+    INT 21h
+
+    GOTOXY 13, 2
+    MOV AX, [puntaje1]
+    CALL PRINT_NUM
+    
+    GOTOXY 13, 3
+    MOV AX, [tiempo_restante]
+    CALL PRINT_NUM
+    
+    POPA
+    RET
+Dibujar_HUD ENDP
+
+; =======================================================
+; CONTADORSILLO REGRESIVO PARA ANTES DE LA SECUENCIA
+; =======================================================
+Mostrar_Contador PROC NEAR
+    PUSHA
+
+    ; Imprimie el mensaje:
+    GOTOXY 33, 11
+    PRINT "Secuencia en:"
+
+    ; Pausa de 1 segundo (1,000,000 microsegundos = 0F4240h)
+    MOV CX, 0Fh     ; Parte alta de 1,000,000
+    MOV DX, 4240h   ; Parte baja de 1,000,000
+    
+    ; Imprimir 3
+    GOTOXY 39, 12   ; Posiciona el número debajo del texto
+    PUTC '3'
+    MOV AH, 86h     ; Función de pausa de INT 15h
+    INT 15h         ; Esperar 1 segundo
+
+    ; Imprimir 2
+    GOTOXY 39, 12
+    PUTC '2'
+    MOV AH, 86h
+    INT 15h         ; Esperar 1 segundo
+
+    ; Imprimir 1
+    GOTOXY 39, 12
+    PUTC '1'
+    MOV AH, 86h
+    INT 15h         ; Esperar 1 segundo
+    
+    POPA
+    RET
+Mostrar_Contador ENDP
+
 CODIGO ENDS
+
+DEFINE_PRINT_STRING
+DEFINE_PRINT_NUM
+DEFINE_PRINT_NUM_UNS
+
 END INICIO
