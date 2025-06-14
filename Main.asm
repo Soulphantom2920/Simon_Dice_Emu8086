@@ -55,7 +55,8 @@ DATOS SEGMENT
     ; --- Constantes y Datos para Colores ---
     COLOR_PALETTE_SIZE  EQU 15
     prng_seed   DW  ?
-    color_palette   DB  1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7, 1
+    color_palette   DB  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+    palette_chars   DB 'A', 'R', 'V', 'M', 'N', 'C', 'G', 'B', 'Z', 'F', 'Q', 'T', 'L', 'P', 'S'
       
     ; --- Constantes de Dificultad ---
     COLOR_SEQ_LENGTH_EASY   EQU 5
@@ -75,7 +76,7 @@ DATOS SEGMENT
     time_delays_l   DW 12D0h, 71B0h, 0D480h 
 
     ; Tiempos iniciales por dificultad (en segundos)
-    tiempos_iniciales   dw 10, 7, 5 ; Facil, Intermedio, Dificil
+    tiempos_iniciales   dw 10, 8, 5
     
 DATOS ENDS
 
@@ -103,9 +104,8 @@ Main_Game_Loop PROC NEAR
     CALL Configure_Game_Settings
     
     CALL Dibujar_HUD
-                   
     CALL Mostrar_Contador
-                   
+    
     CMP tipo_juego, 1
     JE jugar_colores_main
     CMP tipo_juego, 2
@@ -127,6 +127,29 @@ jugar_numeros_main:
 
 post_secuencia:
     CALL Dibujar_HUD
+    
+    CMP tipo_juego, 1
+    JE  dibuja_paleta_colores
+    CMP tipo_juego, 2
+    JE  dibuja_paleta_emojis
+    CMP tipo_juego, 3
+    JE  dibuja_paleta_numeros
+    JMP dibujar_botones
+
+dibuja_paleta_colores:
+    CALL Dibujar_Paleta_Colores
+    JMP dibujar_botones
+
+dibuja_paleta_emojis:
+    CALL Dibujar_Paleta_Emojis
+    JMP dibujar_botones
+
+dibuja_paleta_numeros:
+    CALL Dibujar_Paleta_Numeros
+
+dibujar_botones:
+    CALL Dibujar_Botones_Menu
+    
     MOV AH, 00h
     INT 16h
 
@@ -518,29 +541,19 @@ Actualizar_Tiempo_Inicial PROC NEAR
     RET
 Actualizar_Tiempo_Inicial ENDP
 
-; =======================================================
-;         PROCEDIMIENTO PARA DIBUJAR EL HUD (NUEVO ESTILO)
-; =======================================================
 Dibujar_HUD PROC NEAR
     PUSHA
-
-    ; --- 1. Limpiar la pantalla ---
     MOV AH, 06h
     MOV AL, 0
-    MOV BH, 07h     ; Fondo Negro, Texto Gris
+    MOV BH, 07h
     MOV CX, 0000
     MOV DX, 184Fh
     INT 10h
-
-    ; --- [MODIFICADO] Dibujar el recuadro con '_' y '|' ---
-    ; Línea horizontal superior
     GOTOXY 0, 0
     MOV CX, 26
-    top_line:
+    top_line_hud:
         PUTC '_'
-    LOOP top_line
-    
-    ; Líneas verticales
+    LOOP top_line_hud
     GOTOXY 0, 1
     PUTC '|'
     GOTOXY 25, 1
@@ -553,74 +566,217 @@ Dibujar_HUD PROC NEAR
     PUTC '|'
     GOTOXY 25, 3
     PUTC '|'
-    
-    ; Línea horizontal inferior
     GOTOXY 0, 4
     MOV CX, 26
-    bottom_line:
+    bottom_line_hud:
         PUTC '_'
-    LOOP bottom_line
-    
-    ; --- 3. Imprimir la información (sin cambios) ---
+    LOOP bottom_line_hud
     GOTOXY 2, 1
     PRINT "Jugador 1: "
     GOTOXY 2, 2
     PRINT "Puntaje: "
     GOTOXY 2, 3
     PRINT "Tiempo: "
-
     GOTOXY 13, 1
     MOV DX, OFFSET nickname1
     MOV AH, 09h
     INT 21h
-
     GOTOXY 13, 2
     MOV AX, [puntaje1]
     CALL PRINT_NUM
-    
     GOTOXY 13, 3
     MOV AX, [tiempo_restante]
     CALL PRINT_NUM
-    
     POPA
     RET
 Dibujar_HUD ENDP
 
-; =======================================================
-; CONTADORSILLO REGRESIVO PARA ANTES DE LA SECUENCIA
-; =======================================================
 Mostrar_Contador PROC NEAR
     PUSHA
-
-    ; Imprimie el mensaje:
     GOTOXY 33, 11
     PRINT "Secuencia en:"
-
-    ; Pausa de 1 segundo (1,000,000 microsegundos = 0F4240h)
-    MOV CX, 0Fh     ; Parte alta de 1,000,000
-    MOV DX, 4240h   ; Parte baja de 1,000,000
-    
-    ; Imprimir 3
-    GOTOXY 39, 12   ; Posiciona el número debajo del texto
+    MOV CX, 0Fh
+    MOV DX, 4240h
+    GOTOXY 39, 12
     PUTC '3'
-    MOV AH, 86h     ; Función de pausa de INT 15h
-    INT 15h         ; Esperar 1 segundo
-
-    ; Imprimir 2
+    MOV AH, 86h
+    INT 15h
     GOTOXY 39, 12
     PUTC '2'
     MOV AH, 86h
-    INT 15h         ; Esperar 1 segundo
-
-    ; Imprimir 1
+    INT 15h
     GOTOXY 39, 12
     PUTC '1'
     MOV AH, 86h
-    INT 15h         ; Esperar 1 segundo
+    INT 15h
+    POPA
+    RET
+Mostrar_Contador ENDP  
+
+Dibujar_Paleta_Colores PROC NEAR
+    PUSHA
+    MOV SI, 0
+    MOV DH, 8
+draw_row:
+    MOV DI, 0
+    MOV DL, 20
+draw_col:
+    MOV AH, 02h
+    MOV BH, 0
+    INT 10h
+    CALL Dibujar_Recuadro_Color
+    INC SI
+    ADD DL, 5
+    INC DI
+    CMP DI, 5
+    JNE draw_col
+    ADD DH, 4
+    CMP DH, 20
+    JNE draw_row
+    POPA
+    RET
+Dibujar_Paleta_Colores ENDP
+
+Dibujar_Recuadro_Color PROC NEAR
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH DX
+    MOV BX, SI
+    MOV AL, [palette_chars + BX]
+    MOV BL, [color_palette + BX]
+    PUSH DX
+    INC DH
+    ADD DL, 1
+    MOV AH, 02h
+    INT 10h
+    MOV CX, 1
+    MOV AH, 09h
+    INT 10h
+    POP DX
+    POP DX
+    POP CX
+    POP BX
+    POP AX
+    RET
+Dibujar_Recuadro_Color ENDP
+
+; =======================================================
+;       PROCEDIMIENTO PARA DIBUJAR LA PALETA DE EMOJIS (Corregido)
+; =======================================================
+Dibujar_Paleta_Emojis PROC NEAR
+    PUSHA
+
+    MOV CX, NUM_EMOJIS ; <-- CORREGIDO: Usar la constante para 20 emojis
+    MOV SI, 0          ; Índice para recorrer los punteros de emojis
+    
+emoji_grid_loop:
+    PUSH CX
+
+    ; --- Calcular Fila y Columna para la cuadrícula 4x5 ---
+    MOV AX, SI      ; Usamos el índice actual (0-19)
+    MOV BL, 5       ; 5 elementos por fila
+    DIV BL          ; AX = Cociente (fila), AH = Residuo (columna)
+    
+    MOV CH, AL      ; Guardamos el número de fila (0, 1, 2, 3)
+    MOV CL, AH      ; Guardamos el número de columna (0, 1, 2, 3, 4)
+
+    ; Calcular Coordenada Y (Fila de la pantalla)
+    MOV AL, 4       ; Cada fila de la paleta ocupa 4 filas de pantalla
+    MUL CH          ; Fila_actual * 4
+    ADD AL, 6       ; Fila inicial de la paleta
+    MOV DH, AL      
+    
+    ; Calcular Coordenada X (Columna de la pantalla)
+    MOV AL, 8       ; Cada columna de la paleta ocupa 8 de pantalla
+    MUL CL          ; Columna_actual * 8
+    ADD AL, 18      ; Columna inicial de la paleta
+    MOV DL, AL      
+
+    ; --- Posicionar e Imprimir ---
+    MOV AH, 02h
+    MOV BH, 0
+    INT 10h
+
+    PUSH SI         
+    MOV BX, SI
+    SHL BX, 1       
+    MOV DI, [emoji_pointers + BX]
+    PUSH DI
+    POP SI          
+    CALL Print_Single_Emoji_From_SI
+    POP SI          
+
+    INC SI
+    POP CX
+    LOOP emoji_grid_loop
+
+    POPA
+    RET
+Dibujar_Paleta_Emojis ENDP
+
+
+; =======================================================
+;       PROCEDIMIENTO PARA DIBUJAR LA PALETA DE NÚMEROS (Corregido)
+; =======================================================
+Dibujar_Paleta_Numeros PROC NEAR
+    PUSHA
+    
+    MOV CX, 10      ; Son 10 números (0-9)
+    MOV SI, 0       ; Índice de 0 a 9
+    
+num_grid_loop:
+    PUSH CX
+
+    ; --- Calcular Fila y Columna para la cuadrícula 2x5 ---
+    MOV AX, SI
+    MOV BL, 5       ; 5 elementos por fila
+    DIV BL
+    
+    MOV CH, AL      ; Guardamos el número de fila (0 o 1)
+    MOV CL, AH      ; Guardamos el número de columna (0-4)
+    
+    ; Calcular Coordenada Y (Fila de la pantalla)
+    MOV AL, 4
+    MUL CH
+    ADD AL, 10      ; Fila inicial
+    MOV DH, AL
+    
+    ; Calcular Coordenada X (Columna de la pantalla)
+    MOV AL, 8
+    MUL CL
+    ADD AL, 20      ; Columna inicial
+    MOV DL, AL
+
+    ; --- Posicionar e Imprimir ---
+    MOV AH, 02h
+    MOV BH, 0
+    INT 10h
+    
+    ; --- CORREGIDO: Usar la tabla _number_chars ---
+    MOV BX, SI
+    MOV AL, [_number_chars + BX]
+    PUTC AL
+
+    INC SI
+    POP CX
+    LOOP num_grid_loop
     
     POPA
     RET
-Mostrar_Contador ENDP
+Dibujar_Paleta_Numeros ENDP
+
+Dibujar_Botones_Menu PROC NEAR
+    PUSHA
+    GOTOXY 15, 24
+    PRINT "[ Rendirse ]"
+    GOTOXY 35, 24
+    PRINT "[ Reset ]"
+    GOTOXY 55, 24
+    PRINT "[ Quit ]"
+    POPA
+    RET
+Dibujar_Botones_Menu ENDP
 
 CODIGO ENDS
 
