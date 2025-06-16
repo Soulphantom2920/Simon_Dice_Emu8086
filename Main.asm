@@ -26,8 +26,10 @@ DATOS SEGMENT
     estado_j1       db 1
     estado_j2       db 1
     
-    tiempo_restante dw 0 
-
+    tiempo_restante  dw 0 
+    oportunidades_j1 db 0
+    oportunidades_j2 db 0
+    
     SCREEN_WIDTH    EQU 80
     SCREEN_HEIGHT   EQU 25
 
@@ -82,7 +84,8 @@ DATOS SEGMENT
     time_delays_l   DW 12D0h, 71B0h, 0D480h 
 
     tiempos_iniciales   dw 10, 8, 5
-    
+    oportunidades_iniciales DB 3, 2, 1 
+     
     PIXELS_PER_CHAR   EQU 8
     COL_GRID_S_COL    EQU 20
     COL_GRID_S_ROW    EQU 8
@@ -139,7 +142,8 @@ DATOS SEGMENT
     elemento_seleccionado db ?
     mouse_x           dw ?
     mouse_y           dw ?
-    menu_click_result db 0
+    menu_click_result db 0 
+    
 DATOS ENDS
 
 PILA SEGMENT
@@ -221,12 +225,14 @@ dibujar_botones:
         LOOP verif_loop_inline
     JMP ronda_ganada
         
+;Lógica de ronda perdida que maneja ambos modos de juego
 ronda_perdida:
     GOTOXY 28, 12
     LEA DX, msg_fallo
     MOV AH, 09h
     INT 21h
     
+    ; Muestra el feedback de secuencias, útil para ambos modos
     GOTOXY 0, 21
     PRINT "Simon Dice: "
     LEA SI, game_sequence_buffer
@@ -241,15 +247,43 @@ ronda_perdida:
     MOV CH, 0
     CALL Print_Buffer
     
+    ;Comprueba el modo de juego para decidir qué hacer ---
+    CMP [modo_juego], 1
+    JE modo_tiempo_perdida      ; Si es 1, es por tiempo, usa la lógica anterior
+
+;Lógica para MODO POR OPORTUNIDADES ---
+modo_oportunidades_perdida:
+    CMP [jugador_actual], 1
+    JE restar_oportunidad_j1
+    
+restar_oportunidad_j2:
+    DEC [oportunidades_j2]      ; Resta una vida al J2
+    CALL Dibujar_HUD            ; Actualiza el HUD para mostrar la vida menos
+    CMP [oportunidades_j2], 0
+    JNE cambiar_de_turno        ; Si aún tiene vidas, solo cambia el turno
+    MOV [estado_j2], 0          ; Si no, queda fuera de juego
+    JMP chequear_fin_partida    ; Y revisa si la partida terminó
+
+restar_oportunidad_j1:
+    DEC [oportunidades_j1]      ; Resta una vida al J1
+    CALL Dibujar_HUD            ; Actualiza el HUD
+    CMP [oportunidades_j1], 0
+    JNE cambiar_de_turno        ; Si aún tiene vidas, solo cambia el turno
+    MOV [estado_j1], 0          ; Si no, queda fuera de juego
+    JMP chequear_fin_partida    ; Y revisa si la partida terminó
+
+modo_tiempo_perdida:
     CMP [player_count], 1
     JE fin_juego_individual
 
     CMP [jugador_actual], 1
-    JE marcar_j1_fuera
-marcar_j2_fuera:
+    JE marcar_j1_fuera_directo
+
+marcar_j2_fuera_directo:
     MOV [estado_j2], 0
     JMP chequear_fin_partida
-marcar_j1_fuera:
+
+marcar_j1_fuera_directo:
     MOV [estado_j1], 0
 
 chequear_fin_partida:
@@ -491,17 +525,20 @@ sequence_complete:
     RET
 Esperar_Input_Jugador_Loop ENDP
 
+;; --- (MODIFICADO) --- El HUD ahora muestra Vidas o Tiempo dinámicamente
 Dibujar_HUD PROC NEAR
     PUSH AX
     PUSH BX
     PUSH CX
     PUSH DX
+    
     MOV AH, 06h
     MOV AL, 0
     MOV BH, 07h
     MOV CX, 0000
     MOV DX, 184Fh
     INT 10h
+    
     GOTOXY 0, 0
     MOV CX, 26
     top_line_hud:
@@ -524,14 +561,16 @@ Dibujar_HUD PROC NEAR
     bottom_line_hud:
         PUTC '_'
     LOOP bottom_line_hud
+    
     GOTOXY 2, 1
     PRINT "Jugador: "
     GOTOXY 2, 2
     PRINT "Puntaje: "
-    GOTOXY 2, 3
-    PRINT "Tiempo: "
+
+    ;; --- Lógica para mostrar datos de J1 o J2 ---
     CMP [jugador_actual], 1
     JE hud_para_j1
+
 hud_para_j2:
     GOTOXY 13, 1
     MOV DX, OFFSET nickname2
@@ -540,7 +579,8 @@ hud_para_j2:
     GOTOXY 13, 2
     MOV AX, [puntaje2]
     CALL PRINT_NUM
-    JMP hud_mostrar_tiempo
+    JMP hud_modo_juego
+
 hud_para_j1:
     GOTOXY 13, 1
     MOV DX, OFFSET nickname1
@@ -549,10 +589,35 @@ hud_para_j1:
     GOTOXY 13, 2
     MOV AX, [puntaje1]
     CALL PRINT_NUM
+
+;HUD que muestra los datos y se ajusta según Vidas o Tiempo
+hud_modo_juego:
+    CMP [modo_juego], 1
+    JE hud_mostrar_tiempo
+
+hud_mostrar_oportunidades:
+    GOTOXY 2, 3
+    PRINT "Vidas:   " ; Imprime Vidas y espacios para limpiar "Tiempo"
+    GOTOXY 13, 3
+    CMP [jugador_actual], 1
+    JE hud_vidas_j1
+    MOV AL, [oportunidades_j2]
+    JMP hud_print_vidas
+hud_vidas_j1:
+    MOV AL, [oportunidades_j1]
+hud_print_vidas:
+    MOV AH, 0  ; Limpia AH para que PRINT_NUM funcione con el valor de AL
+    CALL PRINT_NUM
+    JMP fin_hud
+    
 hud_mostrar_tiempo:
+    GOTOXY 2, 3
+    PRINT "Tiempo:  "
     GOTOXY 13, 3
     MOV AX, [tiempo_restante]
     CALL PRINT_NUM
+
+fin_hud:
     POP DX
     POP CX
     POP BX
@@ -1190,6 +1255,7 @@ invalid_type:
     PRINTN ""
     PRINTN "Opcion invalida."
     JMP ask_type
+
 ask_difficulty:
     PRINTN ""
     PRINT "Seleccione la dificultad (1=Facil, 2=Intermedio, 3=Dificil): "
@@ -1202,15 +1268,44 @@ ask_difficulty:
     CMP AL, 3
     JG invalid_difficulty
     MOV dificultad, AL
-    JMP set_time_mode
+    JMP ask_mode  ;; --- MODIFICADO: Saltamos a preguntar el modo
+
 invalid_difficulty:
     PRINTN ""
     PRINTN "Opcion invalida."
     JMP ask_difficulty
-set_time_mode:
-    MOV modo_juego, 1
+
+;; --- (NUEVO) --- Preguntar por el modo de juego
+ask_mode:
+    PRINTN ""
+    PRINT "Seleccione el modo (1=Por Tiempo, 2=Por Oportunidades): "
+    MOV AH, 01h
+    INT 21h
+    PUTC ' '
+    SUB AL, '0'
+    CMP AL, 1
+    JL invalid_mode_response
+    CMP AL, 2
+    JG invalid_mode_response
+    MOV [modo_juego], AL
+    JMP config_done
+
+invalid_mode_response:
+    PRINTN ""
+    PRINTN "Opcion invalida."
+    JMP ask_mode
+    
 config_done:
+    CMP [modo_juego], 1
+    JE init_tiempo
+    ;llamamos a la rutina de oportunidades 
+    CALL Actualizar_Oportunidades_Iniciales
+    JMP fin_config
+    
+init_tiempo:
     CALL Actualizar_Tiempo_Inicial
+
+fin_config:
     PRINTN ""
     PRINTN "--- Configuracion guardada. Preparando el juego... ---"
     RET
@@ -1230,7 +1325,29 @@ Actualizar_Tiempo_Inicial PROC NEAR
     POP AX
     RET
 Actualizar_Tiempo_Inicial ENDP
-
+                      
+;Procedimiento para establecer las oportunidades iniciales
+Actualizar_Oportunidades_Iniciales PROC NEAR
+    PUSH AX
+    PUSH BX
+    
+    MOV AL, [dificultad]
+    DEC AL  ; Ajusta el índice (1,2,3 -> 0,1,2)
+    MOV AH, 0
+    MOV BX, AX
+    
+    ; Carga el número de oportunidades desde la tabla
+    MOV AL, [oportunidades_iniciales + BX]
+    
+    ; Asigna las oportunidades a ambos jugadores
+    MOV [oportunidades_j1], AL
+    MOV [oportunidades_j2], AL
+    
+    POP BX
+    POP AX
+    RET
+Actualizar_Oportunidades_Iniciales ENDP                      
+ 
 Mostrar_Contador PROC NEAR
     PUSH CX
     PUSH DX
