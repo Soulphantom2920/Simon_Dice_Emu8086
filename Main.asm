@@ -1,6 +1,8 @@
-INCLUDE 'emu8086.inc'
+INCLUDE "emu8086.inc"
 
-DATOS SEGMENT
+DATOS SEGMENT  
+    
+    ;___Mensajes___
     msg_acierto   DB '¡Correcto! Siguiente ronda...', '$'
     msg_fallo     DB '¡Fallaste!', '$'
     msg_rendirse  DB 'Te has rendido. Fin del juego.', '$'
@@ -11,8 +13,9 @@ DATOS SEGMENT
     msg_empate      DB 'Resultado: ES UN EMPATE.', '$'
     msg_j1_gana_rendicion DB 'J2 se rinde. GANA JUGADOR 1!', '$'
     msg_j2_gana_rendicion DB 'J1 se rinde. GANA JUGADOR 2!', '$'
-
-    player_count    db 0
+     
+    ;___Variables de juego y jugadores___
+    cantidad_jugadores    db 0
     nickname1       db 11 dup('$')
     nickname2       db 11 dup('$')
     
@@ -29,10 +32,12 @@ DATOS SEGMENT
     tiempo_restante  dw 0 
     oportunidades_j1 db 0
     oportunidades_j2 db 0
-    
-    SCREEN_WIDTH    EQU 80
-    SCREEN_HEIGHT   EQU 25
+           
+    ;___Constantes de pantalla___          
+    ANCHO_PANTALLA    EQU 80
+    ALTO_PANTALLA   EQU 25
 
+    ;___Emojis___
     NUM_EMOJIS      EQU 20
     emoji1  DB  ':(', 0
     emoji2  DB  ';)', 0
@@ -53,96 +58,104 @@ DATOS SEGMENT
     emoji17 DB  'O_O', 0
     emoji18 DB  '=)', 0
     emoji19 DB  '$_$', 0
-    emoji20 DB  'Y.Y', 0
-    emoji_pointers DW emoji1, emoji2, emoji3, emoji4, emoji5, emoji6, emoji7, emoji8, emoji9, emoji10
-                   DW emoji11, emoji12, emoji13, emoji14, emoji15, emoji16, emoji17, emoji18, emoji19, emoji20
+    emoji20 DB  'Y.Y', 0  
+    punteros_emojis DW emoji1, emoji2, emoji3, emoji4, emoji5, emoji6, emoji7, emoji8, emoji9, emoji10
+                    DW emoji11, emoji12, emoji13, emoji14, emoji15, emoji16, emoji17, emoji18, emoji19, emoji20
+    ;___Numeros___
+    CANTIDAD_NUMEROS      EQU 10
+    caracteres_numericos   DB '0123456789'
     
-    NUMBER_COUNT      EQU 10
-    _number_chars   DB '0123456789'
-
-    COLOR_PALETTE_SIZE  EQU 15
-    prng_seed   DW  ?
-    color_palette   DB  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
-    palette_chars   DB 'A', 'R', 'V', 'M', 'N', 'C', 'G', 'B', 'Z', 'F', 'Q', 'T', 'L', 'P', 'S'
+    ;___Paleta de colores___
+    TAMANO_PALETA_COLOR  EQU 15
+    semilla_prng    DW  ?
+    paleta_colores   DB  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+    paleta_caracteres   DB 'A', 'R', 'V', 'M', 'N', 'C', 'G', 'B', 'Z', 'F', 'Q', 'T', 'L', 'P', 'S'
     
-    game_sequence_buffer   DB 50 DUP(?)
-    player_sequence_buffer DB 50 DUP(?)
-    player_input_count     DB 0
-    current_seq_length     DB ?
+    ;___Buffers y longitudes de secuencia___
+    Longitud_Facil_Emoji   DB 50 DUP(?)
+    buffer_secuencia_jugador DB 50 DUP(?)
+    contador_entrada_jugador     DB 0
+    longitud_secuencia_actual     DB ?
       
-    COLOR_SEQ_LENGTH_EASY   EQU 5
-    COLOR_SEQ_LENGTH_MED    EQU 8
-    COLOR_SEQ_LENGTH_HARD   EQU 12
-    EMOJI_SEQ_LENGTH_EASY   EQU 5
-    EMOJI_SEQ_LENGTH_MED    EQU 8
-    EMOJI_SEQ_LENGTH_HARD   EQU 12
-    NUMBER_SEQ_LENGTH_EASY  EQU 7
-    NUMBER_SEQ_LENGTH_MED   EQU 10
-    NUMBER_SEQ_LENGTH_HARD  EQU 14
+    LONGITUD_SEC_COLOR_FACIL   EQU 5
+    LONGITUD_SEC_COLOR_MEDIO    EQU 8
+    LONGITUD_SEC_COLOR_DIFICIL   EQU 12  
     
-    time_delays_h   DW 13h,   0Bh,   03h
-    time_delays_l   DW 12D0h, 71B0h, 0D480h 
+    LONGITUD_SEC_EMOJI_FACIL   EQU 5
+    LONGITUD_SEC_EMOJI_MEDIO    EQU 8
+    LONGITUD_SEC_EMOJI_DIFICIL   EQU 12
+    
+    LONGITUD_SEC_NUMERO_FACIL  EQU 7
+    LONGITUD_SEC_NUMERO_MEDIO   EQU 10
+    LONGITUD_SEC_NUMERO_DIFICIL  EQU 14
+    
+    
+    ;___Tiempos y oportunidades iniciales___
+    retardos_tiempo_h   DW 13h,   0Bh,   03h
+    retardos_tiempo_l   DW 12D0h, 71B0h, 0D480h 
 
     tiempos_iniciales   dw 10, 8, 5
     oportunidades_iniciales DB 3, 2, 1 
-     
-    PIXELS_PER_CHAR   EQU 8
-    COL_GRID_S_COL    EQU 20
-    COL_GRID_S_ROW    EQU 8
-    COL_GRID_H_SP     EQU 5
-    COL_GRID_V_SP     EQU 4
-    COL_GRID_N_FILAS  EQU 3
-    COL_GRID_N_COLS   EQU 5
-    COL_CLICK_BOX_W   EQU 2 * PIXELS_PER_CHAR
-    COL_CLICK_BOX_H   EQU 2 * PIXELS_PER_CHAR
-    COL_GRID_X_START  DW COL_GRID_S_COL * PIXELS_PER_CHAR
-    COL_GRID_Y_START  DW COL_GRID_S_ROW * PIXELS_PER_CHAR
-    COL_ANCHO_CELDA   EQU COL_GRID_H_SP * PIXELS_PER_CHAR
-    COL_ALTO_CELDA    EQU COL_GRID_V_SP * PIXELS_PER_CHAR
     
-    EMOJI_GRID_S_COL  EQU 18
-    EMOJI_GRID_S_ROW  EQU 6
-    EMOJI_GRID_H_SP   EQU 8
-    EMOJI_GRID_V_SP   EQU 4
-    EMOJI_GRID_N_FILAS EQU 4
-    EMOJI_GRID_N_COLS  EQU 5
-    EMOJI_CLICK_BOX_W  EQU 4 * PIXELS_PER_CHAR
-    EMOJI_CLICK_BOX_H  EQU 2 * PIXELS_PER_CHAR
-    EMOJI_GRID_X_START DW EMOJI_GRID_S_COL * PIXELS_PER_CHAR
-    EMOJI_GRID_Y_START DW EMOJI_GRID_S_ROW * PIXELS_PER_CHAR
-    EMOJI_ANCHO_CELDA  EQU EMOJI_GRID_H_SP * PIXELS_PER_CHAR
-    EMOJI_ALTO_CELDA   EQU EMOJI_GRID_V_SP * PIXELS_PER_CHAR
-
-    NUM_GRID_S_COL    EQU 20
-    NUM_GRID_S_ROW    EQU 10
-    NUM_GRID_H_SP     EQU 8
-    NUM_GRID_V_SP     EQU 4
-    NUM_GRID_N_FILAS  EQU 2
-    NUM_GRID_N_COLS   EQU 5
-    NUM_CLICK_BOX_W   EQU 2 * PIXELS_PER_CHAR
-    NUM_CLICK_BOX_H   EQU 2 * PIXELS_PER_CHAR
-    NUM_GRID_X_START  DW NUM_GRID_S_COL * PIXELS_PER_CHAR
-    NUM_GRID_Y_START  DW NUM_GRID_S_ROW * PIXELS_PER_CHAR
-    NUM_ANCHO_CELDA   EQU NUM_GRID_H_SP * PIXELS_PER_CHAR
-    NUM_ALTO_CELDA    EQU NUM_GRID_V_SP * PIXELS_PER_CHAR
+    ;___Para interfaz de usuario___
+    PIXELES_POR_CARACTER   EQU 8  
     
-    BTN_RENDIRSE_X DW 15 * PIXELS_PER_CHAR
-    BTN_RENDIRSE_Y DW 24 * PIXELS_PER_CHAR
-    BTN_RENDIRSE_W DW 12 * PIXELS_PER_CHAR
-    BTN_RESET_X    DW 35 * PIXELS_PER_CHAR
-    BTN_RESET_Y    DW 24 * PIXELS_PER_CHAR
-    BTN_RESET_W    DW 9 * PIXELS_PER_CHAR
-    BTN_QUIT_X     DW 55 * PIXELS_PER_CHAR
-    BTN_QUIT_Y     DW 24 * PIXELS_PER_CHAR
-    BTN_QUIT_W     DW 8 * PIXELS_PER_CHAR
-    BTN_H          DW 1 * PIXELS_PER_CHAR
+    COL_CUADRICULA_C_COL    EQU 20
+    COL_CUADRICULA_C_FILA    EQU 8   
+    COL_CUADRICULA_ESP_H     EQU 5
+    COL_CUADRICULA_ESP_V     EQU 4
+    COL_CUADRICULA_N_FILAS  EQU 3
+    COL_CUADRICULA_N_COLS   EQU 5
+    COL_CAJA_CLIC_ANCHO   EQU 2 * PIXELES_POR_CARACTER
+    COL_CAJA_CLIC_ALTO   EQU 2 * PIXELES_POR_CARACTER
+    COL_CUADRICULA_X_INICIO  DW COL_CUADRICULA_C_COL * PIXELES_POR_CARACTER
+    COL_CUADRICULA_Y_INICIO  DW COL_CUADRICULA_C_FILA * PIXELES_POR_CARACTER
+    COL_ANCHO_CELDA   EQU COL_CUADRICULA_ESP_H * PIXELES_POR_CARACTER
+    COL_ALTO_CELDA    EQU COL_CUADRICULA_ESP_V * PIXELES_POR_CARACTER
+    
+    EMOJI_CUADRICULA_C_COL  EQU 18
+    EMOJI_CUADRICULA_C_FILA  EQU 6
+    EMOJI_CUADRICULA_ESP_H   EQU 8
+    EMOJI_CUADRICULA_ESP_V   EQU 4
+    EMOJI_CUADRICULA_N_FILAS EQU 4
+    EMOJI_CUADRICULA_N_COLS  EQU 5
+    EMOJI_CAJA_CLIC_ANCHO  EQU 4 * PIXELES_POR_CARACTER
+    EMOJI_CAJA_CLIC_ALTO  EQU 2 * PIXELES_POR_CARACTER
+    EMOJI_CUADRICULA_X_INICIO DW EMOJI_CUADRICULA_C_COL * PIXELES_POR_CARACTER
+    EMOJI_CUADRICULA_Y_INICIO DW EMOJI_CUADRICULA_C_FILA * PIXELES_POR_CARACTER
+    EMOJI_ANCHO_CELDA  EQU EMOJI_CUADRICULA_ESP_H * PIXELES_POR_CARACTER
+    EMOJI_ALTO_CELDA   EQU EMOJI_CUADRICULA_ESP_V * PIXELES_POR_CARACTER
 
-    mouse_was_down    db 0
+    NUM_CUADRICULA_C_COL    EQU 20
+    NUM_CUADRICULA_C_FILA    EQU 10
+    NUM_CUADRICULA_ESP_H     EQU 8
+    NUM_CUADRICULA_ESP_V     EQU 4
+    NUM_CUADRICULA_N_FILAS  EQU 2
+    NUM_CUADRICULA_N_COLS   EQU 5
+    NUM_CAJA_CLIC_ANCHO   EQU 2 * PIXELES_POR_CARACTER
+    NUM_CAJA_CLIC_ALTO   EQU 2 * PIXELES_POR_CARACTER
+    NUM_CUADRICULA_X_INICIO  DW NUM_CUADRICULA_C_COL * PIXELES_POR_CARACTER
+    NUM_CUADRICULA_Y_INICIO  DW NUM_CUADRICULA_C_FILA * PIXELES_POR_CARACTER
+    NUM_ANCHO_CELDA   EQU NUM_CUADRICULA_ESP_H * PIXELES_POR_CARACTER
+    NUM_ALTO_CELDA    EQU NUM_CUADRICULA_ESP_V * PIXELES_POR_CARACTER
+    
+    BTN_RENDIRSE_X DW 15 * PIXELES_POR_CARACTER
+    BTN_RENDIRSE_Y DW 24 * PIXELES_POR_CARACTER
+    BTN_RENDIRSE_W DW 12 * PIXELES_POR_CARACTER
+    BTN_RESET_X    DW 35 * PIXELES_POR_CARACTER
+    BTN_RESET_Y    DW 24 * PIXELES_POR_CARACTER
+    BTN_RESET_W    DW 9 * PIXELES_POR_CARACTER
+    BTN_QUIT_X     DW 55 * PIXELES_POR_CARACTER
+    BTN_QUIT_Y     DW 24 * PIXELES_POR_CARACTER
+    BTN_QUIT_W     DW 8 * PIXELES_POR_CARACTER
+    BTN_ALTO       DW 1 * PIXELES_POR_CARACTER
+
+    mouse_estaba_presionado    db 0
     click_valido      db 0
     elemento_seleccionado db ?
     mouse_x           dw ?
     mouse_y           dw ?
-    menu_click_result db 0 
+    resultado_clic_menu db 0 
     
 DATOS ENDS
 
@@ -153,127 +166,133 @@ PILA ENDS
 CODIGO SEGMENT
     ASSUME DS:DATOS, CS:CODIGO, SS:PILA
 
+;_________________________________________________________; 
+
 INICIO PROC FAR
     MOV AX, DATOS
     MOV DS, AX
     MOV ES, AX
     
-Main_Game_Loop:
+Bucle_Principal_Juego:
     MOV [estado_j1], 1
     MOV [estado_j2], 1
     MOV [jugador_actual], 1
     MOV [puntaje1], 0
     MOV [puntaje2], 0
 
-    CALL Initial_Setup_Players
-    CALL Configure_Game_Settings
+    CALL Configuracion_Inicial_Jugadores
+    CALL Configurar_Ajustes_Juego
         
-game_round:
+Ronda_Juego:
     CALL Dibujar_HUD
     CALL Mostrar_Contador
     
     CMP tipo_juego, 1
-    JE jugar_colores_main
+    JE Jugar_Colores_Principal
     CMP tipo_juego, 2
-    JE jugar_emojis_main
+    JE Jugar_Emojis_Principal
     CMP tipo_juego, 3
-    JE jugar_numeros_main
+    JE Jugar_Numeros_Principal
     JMP fin_del_juego
-jugar_colores_main:
+Jugar_Colores_Principal:
     CALL Jugar_Secuencia_Colores
-    JMP post_secuencia
-jugar_emojis_main:
+    JMP Post_Secuencia
+Jugar_Emojis_Principal:
     CALL Jugar_Secuencia_Emojis
-    JMP post_secuencia
-jugar_numeros_main:
-    CALL MostrarSecuenciaNumeros
-post_secuencia:
+    JMP Post_Secuencia
+Jugar_Numeros_Principal:
+    CALL Mostrar_Secuencia_Numeros
+Post_Secuencia:
     CALL Dibujar_HUD
     CMP tipo_juego, 1
-    JE  dibuja_paleta_colores
+    JE  Dibuja_Paleta_Colores
     CMP tipo_juego, 2
-    JE  dibuja_paleta_emojis
+    JE  Dibuja_Paleta_Emojis
     CMP tipo_juego, 3
-    JE  dibuja_paleta_numeros
-    JMP dibujar_botones
-dibuja_paleta_colores:
+    JE  Dibuja_Paleta_Numeros
+    JMP Dibujar_Botones
+Dibuja_Paleta_Colores:
     CALL Dibujar_Paleta_Colores
-    JMP dibujar_botones
-dibuja_paleta_emojis:
+    JMP Dibujar_Botones
+Dibuja_Paleta_Emojis:
     CALL Dibujar_Paleta_Emojis
-    JMP dibujar_botones
-dibuja_paleta_numeros:
+    JMP Dibujar_Botones
+Dibuja_Paleta_Numeros:
     CALL Dibujar_Paleta_Numeros
-dibujar_botones:
+Dibujar_Botones:
     CALL Dibujar_Botones_Menu
     
     CALL Esperar_Input_Jugador_Loop
         
-    LEA SI, game_sequence_buffer
-    LEA DI, player_sequence_buffer
-    MOV CL, [current_seq_length]
+    LEA SI, Longitud_Facil_Emoji
+    LEA DI, buffer_secuencia_jugador
+    MOV CL, [longitud_secuencia_actual]
     MOV CH, 0
     JCXZ ronda_ganada
 
-    verif_loop_inline:
+    Verificar_Bucle_Enlinea:
         MOV AL, [SI]
         MOV BL, [DI]
         CMP AL, BL
-        JNE ronda_perdida
+        JNE Ronda_Perdida
         INC SI
         INC DI
-        LOOP verif_loop_inline
-    JMP ronda_ganada
+        LOOP Verificar_Bucle_Enlinea
+        JMP ronda_ganada
         
-;Lógica de ronda perdida que maneja ambos modos de juego
-ronda_perdida:
+;___Logica de ronda perdida que maneja ambos modos de juego___
+Ronda_Perdida:
     GOTOXY 28, 12
     LEA DX, msg_fallo
     MOV AH, 09h
     INT 21h
     
-    ; Muestra el feedback de secuencias, útil para ambos modos
+    ;___da el feedback de las secuencias___
     GOTOXY 0, 21
     PRINT "Simon Dice: "
-    LEA SI, game_sequence_buffer
-    MOV CL, [current_seq_length]
+    LEA SI, Longitud_Facil_Emoji
+    MOV CL, [longitud_secuencia_actual]
     MOV CH, 0
-    CALL Print_Buffer
+    CALL Imprimir_Buffer
         
     GOTOXY 0, 22
     PRINT "Tu Dijiste: "
-    LEA SI, player_sequence_buffer
-    MOV CL, [player_input_count]
+    LEA SI, buffer_secuencia_jugador
+    MOV CL, [contador_entrada_jugador]
     MOV CH, 0
-    CALL Print_Buffer
+    CALL Imprimir_Buffer
     
-    ;Comprueba el modo de juego para decidir qué hacer ---
+    ;___Comprueba el modo de juego para decidir que hacer___
     CMP [modo_juego], 1
-    JE modo_tiempo_perdida      ; Si es 1, es por tiempo, usa la lógica anterior
+    JE Modo_Tiempo_Perdida      ;Si es 1, es por tiempo
 
-;Lógica para MODO POR OPORTUNIDADES ---
+;___Para modo por vidas___
 modo_oportunidades_perdida:
     CMP [jugador_actual], 1
     JE restar_oportunidad_j1
     
 restar_oportunidad_j2:
-    DEC [oportunidades_j2]      ; Resta una vida al J2
-    CALL Dibujar_HUD            ; Actualiza el HUD para mostrar la vida menos
+    DEC [oportunidades_j2]      ;Resta una vida al J2
+    CALL Dibujar_HUD            ;Actualiza el HUD
     CMP [oportunidades_j2], 0
-    JNE cambiar_de_turno        ; Si aún tiene vidas, solo cambia el turno
-    MOV [estado_j2], 0          ; Si no, queda fuera de juego
-    JMP chequear_fin_partida    ; Y revisa si la partida terminó
+    JNE cambiar_de_turno        ;Si aún tiene vidas, solo cambia el turno
+    MOV [estado_j2], 0          ;Si no, queda fuera de juego
+    JMP chequear_fin_partida    ;Y revisa si la partida terminó
 
 restar_oportunidad_j1:
     DEC [oportunidades_j1]      ; Resta una vida al J1
-    CALL Dibujar_HUD            ; Actualiza el HUD
+    CALL Dibujar_HUD            ; Actualiza el HUD para mostrar el nuevo total de vidas
     CMP [oportunidades_j1], 0
     JNE cambiar_de_turno        ; Si aún tiene vidas, solo cambia el turno
-    MOV [estado_j1], 0          ; Si no, queda fuera de juego
-    JMP chequear_fin_partida    ; Y revisa si la partida terminó
-
-modo_tiempo_perdida:
-    CMP [player_count], 1
+    
+    ; Si el jugador se quedó sin vidas:
+    MOV [estado_j1], 0
+    CMP [cantidad_jugadores], 1
+    JE fin_de_partida_individual ; Es 1 jugador, vamos a la pantalla de fin de juego
+    JMP chequear_fin_partida     ; Es 2 jugadores, revisamos quién ganó
+    
+Modo_Tiempo_Perdida:
+    CMP [cantidad_jugadores], 1
     JE fin_juego_individual
 
     CMP [jugador_actual], 1
@@ -287,11 +306,24 @@ marcar_j1_fuera_directo:
     MOV [estado_j1], 0
 
 chequear_fin_partida:
-    CMP [estado_j1], 0
-    JNE cambiar_de_turno
-    CMP [estado_j2], 0
-    JNE cambiar_de_turno
-    JMP declarar_ganador
+    CMP [estado_j1], 1
+    JE p1_sigue_activo
+    ;Si llegamos aquí, J1 está fuera.
+    CMP [estado_j2], 1
+    JNE declarar_ganador ;Ambos están fuera (empate)
+    ;J1 está fuera, pero J2 sigue activo, por lo tanto, J2 gana.
+    GOTOXY 28, 13
+    LEA DX, msg_j2_gana
+    JMP mostrar_ganador
+
+p1_sigue_activo:
+    ;J1 está activo, verificamos a J2.
+    CMP [estado_j2], 1
+    JE cambiar_de_turno ;Ambos siguen activos, solo cambiamos de turno.
+    ;J1 está activo, pero J2 está fuera, por lo tanto, J1 gana.
+    GOTOXY 28, 13
+    LEA DX, msg_j1_gana
+    JMP mostrar_ganador
 
 fin_juego_individual:
     CALL Manejar_Opciones_Fin_Juego
@@ -304,7 +336,8 @@ dar_punto_j2:
     ADD [puntaje2], 10
     JMP mostrar_mensaje_acierto
 dar_punto_j1:
-    ADD [puntaje1], 10
+    ADD [puntaje1], 10 
+    
 mostrar_mensaje_acierto:
     GOTOXY 28, 12
     LEA DX, msg_acierto
@@ -317,23 +350,23 @@ mostrar_mensaje_acierto:
     JMP cambiar_de_turno
 
 cambiar_de_turno:
-    CMP [player_count], 2
-    JNE game_round
+    CMP [cantidad_jugadores], 2
+    JNE Ronda_Juego
 
     CMP [jugador_actual], 1
     JE chequear_estado_j2
 
 chequear_estado_j1:
     CMP [estado_j1], 1
-    JNE game_round 
+    JNE Ronda_Juego 
     MOV [jugador_actual], 1
-    JMP game_round
+    JMP Ronda_Juego
 
 chequear_estado_j2:
     CMP [estado_j2], 1
-    JNE game_round 
+    JNE Ronda_Juego 
     MOV [jugador_actual], 2
-    JMP game_round
+    JMP Ronda_Juego
 
 declarar_ganador:
     GOTOXY 28, 13
@@ -354,8 +387,18 @@ mostrar_ganador:
     CALL Manejar_Opciones_Fin_Juego
     JMP fin_del_juego
 
+fin_de_partida_individual:
+    GOTOXY 28, 12
+    LEA DX, msg_fallo
+    MOV AH, 09h
+    INT 21h ;Muestra el mensaje "¡Fallaste!"
+    
+    CALL Dibujar_Botones_Menu    ;Dibuja los botones [Rendirse] [Reset] [Quit]
+    CALL Manejar_Opciones_Fin_Juego ;Espera a que el usuario haga clic en una opción
+    JMP fin_del_juego           
+           
 jugador_se_rinde:
-    CMP [player_count], 1
+    CMP [cantidad_jugadores], 1
     JE rendicion_j1_solo
 
     GOTOXY 28, 12
@@ -378,27 +421,29 @@ rendicion_j1_solo:
 
 fin_del_juego:
     MOV AX, 4C00h
-    INT 21h
+    INT 21h 
+    
 INICIO ENDP
 
 Manejar_Opciones_Fin_Juego PROC NEAR
-    CALL init_mouse
-    mov mouse_was_down, 0
-end_game_loop:
+    CALL Iniciar_Mouse
+    mov mouse_estaba_presionado, 0   
+    
+Bucle_Fin_Juego:
     mov ax, 3
     int 33h
     mov [mouse_x], cx
     mov [mouse_y], dx
     cmp bx, 1
-    jne end_game_button_released
-    cmp mouse_was_down, 1
-    je end_game_loop
-    mov mouse_was_down, 1
-    call check_click_on_menu
-    mov al, [menu_click_result]
+    jne Lanzar_Boton_Fin_Juego
+    cmp mouse_estaba_presionado, 1
+    je Bucle_Fin_Juego
+    mov mouse_estaba_presionado, 1
+    call Verificar_Clic_Menu
+    mov al, [resultado_clic_menu]
     cmp al, 2
-    jne check_quit_end_game
-    call shutdown_mouse
+    jne Verificar_Salir_Fin_Juego
+    call Apagar_Mouse
     mov ah, 06h
     mov al, 00h
     mov bh, 07h
@@ -406,44 +451,48 @@ end_game_loop:
     mov dx, 184Fh
     int 10h
     GOTOXY 0, 0
-    jmp Main_Game_Loop
-check_quit_end_game:
+    jmp Bucle_Principal_Juego
+
+Verificar_Salir_Fin_Juego:
     cmp al, 3
-    jne end_game_loop
-    jmp fin_del_juego
-end_game_button_released:
-    mov mouse_was_down, 0
-    jmp end_game_loop
+    jne Bucle_Fin_Juego
+    jmp fin_del_juego  
+    
+Lanzar_Boton_Fin_Juego:
+    mov mouse_estaba_presionado, 0
+    jmp Bucle_Fin_Juego
     RET
 Manejar_Opciones_Fin_Juego ENDP
 
-;; --- (RESTAURADO) --- Procedimiento con la lógica de feedback original
+;_________________________________________________________;           
+          
+;___Procedimiento para darle el feedback___
 Esperar_Input_Jugador_Loop PROC NEAR
-    CALL init_mouse
+    CALL Iniciar_Mouse
     CALL Determinar_Longitud_Secuencia
-    mov [player_input_count], 0
+    mov [contador_entrada_jugador], 0
     
     GOTOXY 1, 20
     LEA DX, msg_feedback
     MOV AH, 09h
     INT 21h
     
-mouse_input_loop:
+Bucle_Entrada_Mouse:
     mov ax, 3
     int 33h
     mov [mouse_x], cx
     mov [mouse_y], dx
     
     cmp bx, 1
-    jne button_released_main
+    jne Lanzar_Boton_Principal
     
-    cmp mouse_was_down, 1
-    je mouse_input_loop
-    mov mouse_was_down, 1
+    cmp mouse_estaba_presionado, 1
+    je Bucle_Entrada_Mouse
+    mov mouse_estaba_presionado, 1
     
-    call check_click_on_menu
-    cmp [menu_click_result], 0
-    jne handle_menu_click
+    call Verificar_Clic_Menu
+    cmp [resultado_clic_menu], 0
+    jne Manejar_Clic_Menu
 
     mov al, [tipo_juego]
     cmp al, 1
@@ -452,27 +501,27 @@ mouse_input_loop:
     je check_emojis
     cmp al, 3
     je check_numeros
-    jmp mouse_input_loop
+    jmp Bucle_Entrada_Mouse
 
 check_colores:
-    call check_click_on_colores
+    call Verificar_Clic_Colores
     jmp procesar_clic_valido
 check_emojis:
-    call check_click_on_emojis
+    call Verificar_Clic_Emojis
     jmp procesar_clic_valido
 check_numeros:
-    call check_click_on_numeros
+    call Verificar_Clic_Numeros
 
 procesar_clic_valido:
     cmp [click_valido], 0
-    je mouse_input_loop
+    je Bucle_Entrada_Mouse
 
-    mov al, [player_input_count]
+    mov al, [contador_entrada_jugador]
     mov ah, 0
     mov si, ax
     
     mov al, [elemento_seleccionado]
-    mov [player_sequence_buffer + si], al
+    mov [buffer_secuencia_jugador + si], al
 
     GOTOXY 19, 20
     mov al, [elemento_seleccionado]
@@ -480,23 +529,23 @@ procesar_clic_valido:
     CALL PRINT_NUM_UNS
     PRINT " "
     
-    inc [player_input_count]
-    mov al, [player_input_count]
-    cmp al, [current_seq_length]
-    je sequence_complete
+    inc [contador_entrada_jugador]
+    mov al, [contador_entrada_jugador]
+    cmp al, [longitud_secuencia_actual]
+    je Secuencia_Completa
     
-    jmp mouse_input_loop
+    jmp Bucle_Entrada_Mouse
 
-handle_menu_click:
-    mov al, [menu_click_result]
+Manejar_Clic_Menu:
+    mov al, [resultado_clic_menu]
     cmp al, 1
-    jne check_reset
+    jne Verificar_Reset
     jmp jugador_se_rinde
 
-check_reset:
+Verificar_Reset:
     cmp al, 2
-    jne check_quit
-    call shutdown_mouse
+    jne Verificar_Quit
+    call Apagar_Mouse
     mov ah, 06h
     mov al, 00h
     mov bh, 07h
@@ -504,28 +553,30 @@ check_reset:
     mov dx, 184Fh
     int 10h
     GOTOXY 0, 0
-    jmp Main_Game_Loop
+    jmp Bucle_Principal_Juego
 
-check_quit:
+Verificar_Quit:
     cmp al, 3
     jne fin_manejo_clicks
     jmp fin_del_juego
 
 fin_manejo_clicks:
-    jmp sequence_complete
+    jmp Secuencia_Completa
 
-button_released_main:
-    mov mouse_was_down, 0
-    jmp mouse_input_loop
+Lanzar_Boton_Principal:
+    mov mouse_estaba_presionado, 0
+    jmp Bucle_Entrada_Mouse
 
-sequence_complete:
+Secuencia_Completa:
     GOTOXY 1, 20
     PRINT "                                  "
-    call shutdown_mouse
+    call Apagar_Mouse
     RET
 Esperar_Input_Jugador_Loop ENDP
 
-;; --- (MODIFICADO) --- El HUD ahora muestra Vidas o Tiempo dinámicamente
+;_________________________________________________________; 
+
+;___HUD___
 Dibujar_HUD PROC NEAR
     PUSH AX
     PUSH BX
@@ -541,9 +592,9 @@ Dibujar_HUD PROC NEAR
     
     GOTOXY 0, 0
     MOV CX, 26
-    top_line_hud:
+    Linea_Superior_HUD:
         PUTC '_'
-    LOOP top_line_hud
+    LOOP Linea_Superior_HUD
     GOTOXY 0, 1
     PUTC '|'
     GOTOXY 25, 1
@@ -558,16 +609,16 @@ Dibujar_HUD PROC NEAR
     PUTC '|'
     GOTOXY 0, 4
     MOV CX, 26
-    bottom_line_hud:
+    Linea_Inferior_HUD:
         PUTC '_'
-    LOOP bottom_line_hud
+    LOOP Linea_Inferior_HUD
     
     GOTOXY 2, 1
     PRINT "Jugador: "
     GOTOXY 2, 2
     PRINT "Puntaje: "
 
-    ;; --- Lógica para mostrar datos de J1 o J2 ---
+    ;___Para mostrar datos de J1 o J2___
     CMP [jugador_actual], 1
     JE hud_para_j1
 
@@ -590,23 +641,25 @@ hud_para_j1:
     MOV AX, [puntaje1]
     CALL PRINT_NUM
 
-;HUD que muestra los datos y se ajusta según Vidas o Tiempo
+;___HUD que muestra los datos según vidas o tiempo___
 hud_modo_juego:
     CMP [modo_juego], 1
     JE hud_mostrar_tiempo
 
 hud_mostrar_oportunidades:
     GOTOXY 2, 3
-    PRINT "Vidas:   " ; Imprime Vidas y espacios para limpiar "Tiempo"
+    PRINT "Vidas:   " ;Imprime vidas y espacios para limpiar "tiempo"
     GOTOXY 13, 3
     CMP [jugador_actual], 1
     JE hud_vidas_j1
     MOV AL, [oportunidades_j2]
-    JMP hud_print_vidas
+    JMP hud_print_vidas 
+    
 hud_vidas_j1:
-    MOV AL, [oportunidades_j1]
+    MOV AL, [oportunidades_j1] 
+    
 hud_print_vidas:
-    MOV AH, 0  ; Limpia AH para que PRINT_NUM funcione con el valor de AL
+    MOV AH, 0  ;Limpia AH para que PRINT_NUM funcione con el valor de AL
     CALL PRINT_NUM
     JMP fin_hud
     
@@ -624,192 +677,209 @@ fin_hud:
     POP AX
     RET
 Dibujar_HUD ENDP
-
+   
+;_________________________________________________________; 
+   
 Determinar_Longitud_Secuencia PROC NEAR
     mov al, [tipo_juego]
     cmp al, 1
-    je set_len_col
+    je Establecer_Long_Col
     cmp al, 2
-    je set_len_emo
+    je establecer_long_emo
     cmp al, 3
-    je set_len_num
+    je establecer_long_num
+    ret         
+    
+Establecer_Long_Col:
+    mov al, [dificultad]
+    cmp al, 1
+    je Establecer_Long_Col_e
+    cmp al, 2
+    je Establecer_Long_Col_m
+    mov bl, LONGITUD_SEC_COLOR_DIFICIL
+    jmp establecer_longitud_fin
+    Establecer_Long_Col_m:
+    mov bl, LONGITUD_SEC_COLOR_MEDIO
+    jmp establecer_longitud_fin
+    Establecer_Long_Col_e:
+    mov bl, LONGITUD_SEC_COLOR_FACIL
+    jmp establecer_longitud_fin  
+    
+establecer_long_emo:
+    mov al, [dificultad]
+    cmp al, 1
+    je establecer_long_emo_e
+    cmp al, 2
+    je establecer_long_emo_m
+    mov bl, LONGITUD_SEC_EMOJI_DIFICIL
+    jmp establecer_longitud_fin
+    establecer_long_emo_m:
+    mov bl, LONGITUD_SEC_EMOJI_MEDIO
+    jmp establecer_longitud_fin
+    establecer_long_emo_e:
+    mov bl, LONGITUD_SEC_EMOJI_FACIL
+    jmp establecer_longitud_fin 
+    
+establecer_long_num:
+    mov al, [dificultad]
+    cmp al, 1
+    je establecer_long_num_e
+    cmp al, 2
+    je establecer_long_num_m
+    mov bl, LONGITUD_SEC_NUMERO_DIFICIL
+    jmp establecer_longitud_fin
+    establecer_long_num_m:
+    mov bl, LONGITUD_SEC_NUMERO_MEDIO
+    jmp establecer_longitud_fin
+    establecer_long_num_e:
+    mov bl, LONGITUD_SEC_NUMERO_FACIL 
+    
+establecer_longitud_fin:
+    mov [longitud_secuencia_actual], bl
     ret
-set_len_col:
-    mov al, [dificultad]
-    cmp al, 1
-    je set_len_col_e
-    cmp al, 2
-    je set_len_col_m
-    mov bl, COLOR_SEQ_LENGTH_HARD
-    jmp fin_set_len
-    set_len_col_m:
-    mov bl, COLOR_SEQ_LENGTH_MED
-    jmp fin_set_len
-    set_len_col_e:
-    mov bl, COLOR_SEQ_LENGTH_EASY
-    jmp fin_set_len
-set_len_emo:
-    mov al, [dificultad]
-    cmp al, 1
-    je set_len_emo_e
-    cmp al, 2
-    je set_len_emo_m
-    mov bl, EMOJI_SEQ_LENGTH_HARD
-    jmp fin_set_len
-    set_len_emo_m:
-    mov bl, EMOJI_SEQ_LENGTH_MED
-    jmp fin_set_len
-    set_len_emo_e:
-    mov bl, EMOJI_SEQ_LENGTH_EASY
-    jmp fin_set_len
-set_len_num:
-    mov al, [dificultad]
-    cmp al, 1
-    je set_len_num_e
-    cmp al, 2
-    je set_len_num_m
-    mov bl, NUMBER_SEQ_LENGTH_HARD
-    jmp fin_set_len
-    set_len_num_m:
-    mov bl, NUMBER_SEQ_LENGTH_MED
-    jmp fin_set_len
-    set_len_num_e:
-    mov bl, NUMBER_SEQ_LENGTH_EASY
-fin_set_len:
-    mov [current_seq_length], bl
-    ret
-ENDP
-
-init_mouse PROC NEAR
+Determinar_Longitud_Secuencia ENDP
+                     
+;_________________________________________________________; 
+                     
+Iniciar_Mouse PROC NEAR
     mov ax, 0
     int 33h
     mov ax, 1
     int 33h
     ret
-ENDP
-
-shutdown_mouse PROC NEAR
+Iniciar_Mouse ENDP
+        
+;_________________________________________________________;
+        
+Apagar_Mouse PROC NEAR
     mov ax, 2
     int 33h
     ret
-ENDP
-
-check_click_on_colores PROC NEAR
+Apagar_Mouse ENDP
+      
+;_________________________________________________________;  
+      
+Verificar_Clic_Colores PROC NEAR
     mov cx, [mouse_x]
     mov dx, [mouse_y]
-    cmp dx, COL_GRID_Y_START
+    cmp dx, COL_CUADRICULA_Y_INICIO
     jl salir_sin_exito_mouse
-    mov ax, COL_GRID_Y_START
-    add ax, (COL_GRID_N_FILAS * COL_ALTO_CELDA)
+    mov ax, COL_CUADRICULA_Y_INICIO
+    add ax, (COL_CUADRICULA_N_FILAS * COL_ALTO_CELDA)
     cmp dx, ax
     jge salir_sin_exito_mouse
-    cmp cx, COL_GRID_X_START
+    cmp cx, COL_CUADRICULA_X_INICIO
     jl salir_sin_exito_mouse
-    mov ax, COL_GRID_X_START
-    add ax, (COL_GRID_N_COLS * COL_ANCHO_CELDA)
+    mov ax, COL_CUADRICULA_X_INICIO
+    add ax, (COL_CUADRICULA_N_COLS * COL_ANCHO_CELDA)
     cmp cx, ax
     jge salir_sin_exito_mouse
     mov ax, cx
-    sub ax, COL_GRID_X_START
+    sub ax, COL_CUADRICULA_X_INICIO
     xor dx, dx
     mov bx, COL_ANCHO_CELDA
     div bx
-    cmp dx, COL_CLICK_BOX_W
+    cmp dx, COL_CAJA_CLIC_ANCHO
     jge salir_sin_exito_mouse
     mov ch, al
     mov ax, [mouse_y]
-    sub ax, COL_GRID_Y_START
+    sub ax, COL_CUADRICULA_Y_INICIO
     xor dx, dx
     mov bx, COL_ALTO_CELDA
     div bx
-    cmp dx, COL_CLICK_BOX_H
+    cmp dx, COL_CAJA_CLIC_ALTO
     jge salir_sin_exito_mouse
     mov cl, al
     mov al, cl
-    mov bl, COL_GRID_N_COLS
+    mov bl, COL_CUADRICULA_N_COLS
     mul bl
     add al, ch
     mov [elemento_seleccionado], al
     mov [click_valido], 1
-    ret
+    ret      
+    
 salir_sin_exito_mouse:
     mov [click_valido], 0
     ret
-ENDP
-
-check_click_on_emojis PROC NEAR
+Verificar_Clic_Colores ENDP
+                            
+;_________________________________________________________; 
+                            
+Verificar_Clic_Emojis PROC NEAR
     mov cx, [mouse_x]
     mov dx, [mouse_y]
-    cmp dx, EMOJI_GRID_Y_START
+    cmp dx, EMOJI_CUADRICULA_Y_INICIO
     jl salir_sin_exito_mouse
-    mov ax, EMOJI_GRID_Y_START
-    add ax, (EMOJI_GRID_N_FILAS * EMOJI_ALTO_CELDA)
+    mov ax, EMOJI_CUADRICULA_Y_INICIO
+    add ax, (EMOJI_CUADRICULA_N_FILAS * EMOJI_ALTO_CELDA)
     cmp dx, ax
     jge salir_sin_exito_mouse
-    cmp cx, EMOJI_GRID_X_START
+    cmp cx, EMOJI_CUADRICULA_X_INICIO
     jl salir_sin_exito_mouse
-    mov ax, EMOJI_GRID_X_START
-    add ax, (EMOJI_GRID_N_COLS * EMOJI_ANCHO_CELDA)
+    mov ax, EMOJI_CUADRICULA_X_INICIO
+    add ax, (EMOJI_CUADRICULA_N_COLS * EMOJI_ANCHO_CELDA)
     cmp cx, ax
     jge salir_sin_exito_mouse
     mov ax, cx
-    sub ax, EMOJI_GRID_X_START
+    sub ax, EMOJI_CUADRICULA_X_INICIO
     xor dx, dx
     mov bx, EMOJI_ANCHO_CELDA
     div bx
-    cmp dx, EMOJI_CLICK_BOX_W
+    cmp dx, EMOJI_CAJA_CLIC_ANCHO
     jge salir_sin_exito_mouse
     mov ch, al
     mov ax, [mouse_y]
-    sub ax, EMOJI_GRID_Y_START
+    sub ax, EMOJI_CUADRICULA_Y_INICIO
     xor dx, dx
     mov bx, EMOJI_ALTO_CELDA
     div bx
-    cmp dx, EMOJI_CLICK_BOX_H
+    cmp dx, EMOJI_CAJA_CLIC_ALTO
     jge salir_sin_exito_mouse
     mov cl, al
     mov al, cl
-    mov bl, EMOJI_GRID_N_COLS
+    mov bl, EMOJI_CUADRICULA_N_COLS
     mul bl
     add al, ch
     mov [elemento_seleccionado], al
     mov [click_valido], 1
     ret
-ENDP
-
-check_click_on_numeros PROC NEAR
+Verificar_Clic_Emojis ENDP
+                         
+;_________________________________________________________; 
+                         
+Verificar_Clic_Numeros PROC NEAR
     mov cx, [mouse_x]
     mov dx, [mouse_y]
-    cmp dx, NUM_GRID_Y_START
+    cmp dx, NUM_CUADRICULA_Y_INICIO
     jl salir_sin_exito_mouse
-    mov ax, NUM_GRID_Y_START
-    add ax, (NUM_GRID_N_FILAS * NUM_ALTO_CELDA)
+    mov ax, NUM_CUADRICULA_Y_INICIO
+    add ax, (NUM_CUADRICULA_N_FILAS * NUM_ALTO_CELDA)
     cmp dx, ax
     jge salir_sin_exito_mouse
-    cmp cx, NUM_GRID_X_START
+    cmp cx, NUM_CUADRICULA_X_INICIO
     jl salir_sin_exito_mouse
-    mov ax, NUM_GRID_X_START
-    add ax, (NUM_GRID_N_COLS * NUM_ANCHO_CELDA)
+    mov ax, NUM_CUADRICULA_X_INICIO
+    add ax, (NUM_CUADRICULA_N_COLS * NUM_ANCHO_CELDA)
     cmp cx, ax
     jge salir_sin_exito_mouse
     mov ax, cx
-    sub ax, NUM_GRID_X_START
+    sub ax, NUM_CUADRICULA_X_INICIO
     xor dx, dx
     mov bx, NUM_ANCHO_CELDA
     div bx
-    cmp dx, NUM_CLICK_BOX_W
+    cmp dx, NUM_CAJA_CLIC_ANCHO
     jge salir_sin_exito_mouse
     mov ch, al
     mov ax, [mouse_y]
-    sub ax, NUM_GRID_Y_START
+    sub ax, NUM_CUADRICULA_Y_INICIO
     xor dx, dx
     mov bx, NUM_ALTO_CELDA
     div bx
-    cmp dx, NUM_CLICK_BOX_H
+    cmp dx, NUM_CAJA_CLIC_ALTO
     jge salir_sin_exito_mouse
     mov cl, al
     mov al, cl
-    mov bl, NUM_GRID_N_COLS
+    mov bl, NUM_CUADRICULA_N_COLS
     mul bl
     add al, ch
     cmp al, 10
@@ -817,46 +887,50 @@ check_click_on_numeros PROC NEAR
     mov [elemento_seleccionado], al
     mov [click_valido], 1
     ret
-ENDP
-
-check_click_on_menu PROC NEAR
-    mov [menu_click_result], 0
+Verificar_Clic_Numeros ENDP
+                    
+;_________________________________________________________; 
+                    
+Verificar_Clic_Menu PROC NEAR
+    mov [resultado_clic_menu], 0
     mov cx, mouse_x
     mov dx, mouse_y
     cmp dx, BTN_RENDIRSE_Y
     jl no_menu_click
     mov ax, BTN_RENDIRSE_Y
-    add ax, BTN_H
+    add ax, BTN_ALTO
     cmp dx, ax
-    jg check_reset_btn
+    jg Verificar_Reset_btn
     cmp cx, BTN_RENDIRSE_X
-    jl check_reset_btn
+    jl Verificar_Reset_btn
     mov ax, BTN_RENDIRSE_X
     add ax, BTN_RENDIRSE_W
     cmp cx, ax
-    jg check_reset_btn
-    mov [menu_click_result], 1
-    ret
-check_reset_btn:
+    jg Verificar_Reset_btn
+    mov [resultado_clic_menu], 1
+    ret      
+    
+Verificar_Reset_btn:
     cmp dx, BTN_RESET_Y
     jl no_menu_click
     mov ax, BTN_RESET_Y
-    add ax, BTN_H
+    add ax, BTN_ALTO
     cmp dx, ax
-    jg check_quit_btn
+    jg Verificar_Quit_btn
     cmp cx, BTN_RESET_X
-    jl check_quit_btn
+    jl Verificar_Quit_btn
     mov ax, BTN_RESET_X
     add ax, BTN_RESET_W
     cmp cx, ax
-    jg check_quit_btn
-    mov [menu_click_result], 2
-    ret
-check_quit_btn:
+    jg Verificar_Quit_btn
+    mov [resultado_clic_menu], 2
+    ret      
+    
+Verificar_Quit_btn:
     cmp dx, BTN_QUIT_Y
     jl no_menu_click
     mov ax, BTN_QUIT_Y
-    add ax, BTN_H
+    add ax, BTN_ALTO
     cmp dx, ax
     jg no_menu_click
     cmp cx, BTN_QUIT_X
@@ -865,12 +939,15 @@ check_quit_btn:
     add ax, BTN_QUIT_W
     cmp cx, ax
     jg no_menu_click
-    mov [menu_click_result], 3
-    ret
+    mov [resultado_clic_menu], 3
+    ret  
+    
 no_menu_click:
     ret
-ENDP
-
+Verificar_Clic_Menu ENDP
+                        
+;_________________________________________________________;  
+                        
 Jugar_Secuencia_Colores PROC NEAR
     PUSH AX
     PUSH BX
@@ -880,38 +957,42 @@ Jugar_Secuencia_Colores PROC NEAR
     PUSH DI
     MOV AH, 2Ch
     INT 21h
-    MOV [prng_seed], DX
+    MOV [semilla_prng], DX
     MOV AH, 00h
     MOV AL, 03h
     INT 10h
-    LEA DI, game_sequence_buffer
+    LEA DI, Longitud_Facil_Emoji
     MOV CH, 0
     CMP dificultad, 1
-    JE  easy_len_color_g
+    JE  Longitud_Facil_Color_G
     CMP dificultad, 2
-    JE  medium_len_color_g
-hard_len_color_g:
-    MOV CL, COLOR_SEQ_LENGTH_HARD
-    JMP start_color_loop_g
-medium_len_color_g:
-    MOV CL, COLOR_SEQ_LENGTH_MED
-    JMP start_color_loop_g
-easy_len_color_g:
-    MOV CL, COLOR_SEQ_LENGTH_EASY
-start_color_loop_g:
-color_sequence_loop:
+    JE  Longitud_Media_Color_G  
+    
+Longitud_Dificil_Color_G:
+    MOV CL, LONGITUD_SEC_COLOR_DIFICIL
+    JMP Iniciar_Bucle_Color_G      
+    
+Longitud_Media_Color_G:
+    MOV CL, LONGITUD_SEC_COLOR_MEDIO
+    JMP Iniciar_Bucle_Color_G       
+    
+Longitud_Facil_Color_G:
+    MOV CL, LONGITUD_SEC_COLOR_FACIL  
+    
+Iniciar_Bucle_Color_G:
+Bucle_Secuencia_Color:
     PUSH CX
-    MOV AX, [prng_seed]
+    MOV AX, [semilla_prng]
     MOV BX, 12345
     MUL BX
     ADD AX, 54321
-    MOV [prng_seed], AX
+    MOV [semilla_prng], AX
     MOV DX, 0
-    MOV BX, COLOR_PALETTE_SIZE
+    MOV BX, TAMANO_PALETA_COLOR
     DIV BX
     MOV [DI], DL
     INC DI
-    LEA SI, color_palette
+    LEA SI, paleta_colores
     ADD SI, DX
     MOV BL, [SI]
     MOV BH, BL
@@ -928,8 +1009,8 @@ color_sequence_loop:
     MOV AH, 0
     SHL AX, 1
     MOV BX, AX
-    MOV CX, [time_delays_h + BX]
-    MOV DX, [time_delays_l + BX]
+    MOV CX, [retardos_tiempo_h + BX]
+    MOV DX, [retardos_tiempo_l + BX]
     MOV AH, 86h
     INT 15h
     MOV BH, 00h
@@ -943,7 +1024,7 @@ color_sequence_loop:
     MOV AH, 86h
     INT 15h
     POP CX
-    LOOP color_sequence_loop
+    LOOP Bucle_Secuencia_Color
     POP DI
     POP SI
     POP DX
@@ -952,7 +1033,9 @@ color_sequence_loop:
     POP AX
     RET
 Jugar_Secuencia_Colores ENDP
-
+               
+;_________________________________________________________; 
+               
 Jugar_Secuencia_Emojis PROC NEAR
     PUSH AX
     PUSH BX
@@ -960,7 +1043,7 @@ Jugar_Secuencia_Emojis PROC NEAR
     PUSH DX
     PUSH SI
     PUSH DI
-    LEA DI, game_sequence_buffer
+    LEA DI, Longitud_Facil_Emoji
     MOV AH, 00h
     MOV AL, 03h
     INT 10h
@@ -973,17 +1056,21 @@ Jugar_Secuencia_Emojis PROC NEAR
     CMP dificultad, 1
     JE  easy_len_emoji
     CMP dificultad, 2
-    JE  medium_len_emoji
-hard_len_emoji:
-    MOV CX, EMOJI_SEQ_LENGTH_HARD
-    JMP start_emoji_loop
-medium_len_emoji:
-    MOV CX, EMOJI_SEQ_LENGTH_MED
-    JMP start_emoji_loop
+    JE  Longitud_Media_Emoji  
+    
+Longitud_Dificil_Emoji:
+    MOV CX, LONGITUD_SEC_EMOJI_DIFICIL
+    JMP Iniciar_Bucle_Emoji 
+    
+Longitud_Media_Emoji:
+    MOV CX, LONGITUD_SEC_EMOJI_MEDIO
+    JMP Iniciar_Bucle_Emoji 
+    
 easy_len_emoji:
-    MOV CX, EMOJI_SEQ_LENGTH_EASY
-start_emoji_loop:
-emoji_sequence_loop:
+    MOV CX, LONGITUD_SEC_EMOJI_FACIL   
+    
+Iniciar_Bucle_Emoji:
+Bucle_Secuencia_Emoji:
     PUSH CX
     MOV AH, 2Ch
     INT 21h
@@ -996,7 +1083,7 @@ emoji_sequence_loop:
     MOV BL, AH
     MOV BH, 0
     SHL BX, 1
-    LEA SI, emoji_pointers
+    LEA SI, punteros_emojis
     ADD SI, BX
     MOV SI, [SI]
     MOV DL, 38
@@ -1004,14 +1091,14 @@ emoji_sequence_loop:
     MOV AH, 02h
     MOV BH, 0
     INT 10h
-    CALL Print_Single_Emoji_From_SI
+    CALL Imprimir_Emoji
     MOV AL, dificultad
     DEC AL
     MOV AH, 0
     SHL AX, 1
     MOV BX, AX
-    MOV CX, [time_delays_h + BX]
-    MOV DX, [time_delays_l + BX]
+    MOV CX, [retardos_tiempo_h + BX]
+    MOV DX, [retardos_tiempo_l + BX]
     MOV AH, 86h
     INT 15h
     MOV AH, 06h
@@ -1025,7 +1112,7 @@ emoji_sequence_loop:
     MOV AH, 86h
     INT 15h
     POP CX
-    LOOP emoji_sequence_loop
+    LOOP Bucle_Secuencia_Emoji
     POP DI
     POP SI
     POP DX
@@ -1034,15 +1121,17 @@ emoji_sequence_loop:
     POP AX
     RET
 Jugar_Secuencia_Emojis ENDP
-
-MostrarSecuenciaNumeros PROC
+     
+;_________________________________________________________; 
+     
+Mostrar_Secuencia_Numeros PROC
     PUSH AX
     PUSH BX
     PUSH CX
     PUSH DX
     PUSH SI
     PUSH DI
-    LEA DI, game_sequence_buffer
+    LEA DI, Longitud_Facil_Emoji
     MOV AH, 00h
     MOV AL, 03h
     INT 10h
@@ -1053,25 +1142,29 @@ MostrarSecuenciaNumeros PROC
     MOV DX, 184Fh
     INT 10h
     CMP dificultad, 1
-    JE  easy_len_num
+    JE  Longitud_Facil_Num
     CMP dificultad, 2
-    JE  medium_len_num
-hard_len_num:
-    MOV CX, NUMBER_SEQ_LENGTH_HARD
-    JMP start_num_loop
-medium_len_num:
-    MOV CX, NUMBER_SEQ_LENGTH_MED
-    JMP start_num_loop
-easy_len_num:
-    MOV CX, NUMBER_SEQ_LENGTH_EASY
-start_num_loop:
-num_sequence_loop:
+    JE  Longitud_Media_Num  
+    
+Longitud_Dificil_Num:
+    MOV CX, LONGITUD_SEC_NUMERO_DIFICIL
+    JMP Iniciar_Bucle_Num   
+    
+Longitud_Media_Num:
+    MOV CX, LONGITUD_SEC_NUMERO_MEDIO
+    JMP Iniciar_Bucle_Num    
+    
+Longitud_Facil_Num:
+    MOV CX, LONGITUD_SEC_NUMERO_FACIL
+    
+Iniciar_Bucle_Num:
+Bucle_Secuencia_Num:
     PUSH CX
     MOV AH, 2Ch
     INT 21h
     MOV AL, DL
     MOV AH, 0
-    MOV BL, NUMBER_COUNT
+    MOV BL, CANTIDAD_NUMEROS
     DIV BL
     MOV [DI], AH
     INC DI
@@ -1090,8 +1183,8 @@ num_sequence_loop:
     MOV AH, 0
     SHL AX, 1
     MOV BX, AX
-    MOV CX, [time_delays_h + BX]
-    MOV DX, [time_delays_l + BX]
+    MOV CX, [retardos_tiempo_h + BX]
+    MOV DX, [retardos_tiempo_l + BX]
     MOV AH, 86h
     INT 15h
     MOV AH, 06h
@@ -1105,7 +1198,7 @@ num_sequence_loop:
     MOV AH, 86h
     INT 15h
     POP CX
-    LOOP num_sequence_loop
+    LOOP Bucle_Secuencia_Num
     POP DI
     POP SI
     POP DX
@@ -1113,48 +1206,57 @@ num_sequence_loop:
     POP BX
     POP AX
     RET
-MostrarSecuenciaNumeros ENDP
-
-Print_Single_Emoji_From_SI PROC NEAR
+Mostrar_Secuencia_Numeros ENDP
+                 
+;_________________________________________________________;                  
+                 
+Imprimir_Emoji PROC NEAR
     PUSH AX
-    PUSH SI
-print_emoji_char:
+    PUSH SI  
+    
+Imprimir_Caracter_Emoji:
     MOV AL, [SI]
     CMP AL, 0
-    JE  end_print_emoji
+    JE  Fin_Imprimir_Emoji
     MOV AH, 0Eh
     INT 10h
     INC SI
-    JMP print_emoji_char
-end_print_emoji:
+    JMP Imprimir_Caracter_Emoji  
+    
+Fin_Imprimir_Emoji:
     POP SI
     POP AX
     RET
-Print_Single_Emoji_From_SI ENDP
-
-Initial_Setup_Players PROC NEAR
+Imprimir_Emoji ENDP
+                  
+;_________________________________________________________;                   
+                  
+Configuracion_Inicial_Jugadores PROC NEAR
     PRINTN "BIENVENIDO A SIMON DICE"
-    PRINTN "=========================="
-ask_players:
+    PRINTN "______________________________"   
+    
+Preguntar_Jugadores:
     PRINT "Cantidad de jugadores (1 o 2): "
     MOV AH, 01h
     INT 21h
     CMP AL, '1'
-    JE one_player
+    JE Un_Jugador
     CMP AL, '2'
-    JE two_players
+    JE Dos_Jugadores
     PRINTN ""
-    PRINTN "Entrada no valida. Por favor, ingrese 1 o 2."
-    JMP ask_players
-one_player:
-    MOV player_count, 1
+    PRINTN "Entrada no valida. Por favor, ingrese 1 o 2:"
+    JMP Preguntar_Jugadores  
+    
+Un_Jugador:
+    MOV cantidad_jugadores, 1
     PRINTN ""
     PRINT "Jugador 1 - Nickname (3-10 caracteres): "
     LEA DI, nickname1
     CALL Read_Nickname
-    JMP show_nicks
-two_players:
-    MOV player_count, 2
+    JMP Mostrar_Nicknames  
+    
+Dos_Jugadores:
+    MOV cantidad_jugadores, 2
     PRINTN ""
     PRINT "Jugador 1 - Nickname (3-10 caracteres): "
     LEA DI, nickname1
@@ -1162,73 +1264,85 @@ two_players:
     PRINTN ""
     PRINT "Jugador 2 - Nickname (3-10 caracteres): "
     LEA DI, nickname2
-    CALL Read_Nickname
-show_nicks:
+    CALL Read_Nickname   
+    
+Mostrar_Nicknames:
     PRINTN ""
     PRINTN "--- Nicknames Registrados ---"
     PRINT "Jugador 1: "
     MOV DX, OFFSET nickname1
     CALL Print_Nickname
-    CMP player_count, 2
-    JNE setup_done
+    CMP cantidad_jugadores, 2
+    JNE Configuracion_Lista
     PRINT "Jugador 2: "
     MOV DX, OFFSET nickname2
-    CALL Print_Nickname
-setup_done:
-    PRINTN "=========================="
+    CALL Print_Nickname 
+    
+Configuracion_Lista:
+    PRINTN "______________________________"
     PRINTN ""
-    RET
-Initial_Setup_Players ENDP
-
+    RET       
+    
+Configuracion_Inicial_Jugadores ENDP
+            
+;_________________________________________________________;             
+            
 Read_Nickname PROC NEAR
     PUSH AX
     PUSH CX
     PUSH BX
     MOV CX, 10
-    XOR BX, BX
-read_loop:
+    XOR BX, BX 
+    
+leer_bucle:
     MOV AH, 00h
     INT 16h
     CMP AL, 0Dh
-    JE check_length
+    JE Verificar_Longitud
     CMP AL, 08h
-    JE backspace
+    JE Retroceder
     CMP BL, 10
-    JAE read_loop
+    JAE leer_bucle
     MOV AH, 0Eh
     INT 10h
     MOV [DI + BX], AL
     INC BX
-    JMP read_loop
-backspace:
+    JMP leer_bucle  
+    
+Retroceder:
     CMP BX, 0
-    JE read_loop
+    JE leer_bucle
     DEC BX
     PUTC 08h
     PUTC ' '
     PUTC 08h
-    JMP read_loop
-check_length:
+    JMP leer_bucle
+    
+Verificar_Longitud:
     CMP BX, 3
-    JB too_short
+    JB Demasiado_Corto
     MOV BYTE PTR [DI + BX], '$'
     POP BX
     POP CX
     POP AX
-    RET
-too_short:
+    RET     
+    
+Demasiado_Corto:
     PRINTN ""
     PRINT "El nickname debe tener entre 3 y 10 caracteres. Intente de nuevo: "
-    MOV CX, BX
-    clear_loop:
+    MOV CX, BX    
+    
+    Limpiar_Bucle:
         PUTC 08h
         PUTC ' '
         PUTC 08h
-    LOOP clear_loop
+    LOOP Limpiar_Bucle
     XOR BX, BX
-    JMP read_loop
+    JMP leer_bucle
 Read_Nickname ENDP
-
+                   
+;_________________________________________________________;                    
+                   
 Print_Nickname PROC NEAR
     PUSH AX
     MOV AH, 09h
@@ -1237,26 +1351,29 @@ Print_Nickname PROC NEAR
     POP AX
     RET
 Print_Nickname ENDP
-
-Configure_Game_Settings PROC NEAR
-ask_type:
+          
+;_________________________________________________________;           
+          
+Configurar_Ajustes_Juego PROC NEAR
+Preguntar_Tipo:
     PRINT "Seleccione el tipo de secuencia (1=Colores, 2=Emojis, 3=Numeros): "
     MOV AH, 01h
     INT 21h
     PUTC ' '
     SUB AL, '0'
     CMP AL, 1
-    JL invalid_type
+    JL Tipo_Invalido
     CMP AL, 3
-    JG invalid_type
+    JG Tipo_Invalido
     MOV tipo_juego, AL
-    JMP ask_difficulty
-invalid_type:
+    JMP Preguntar_Dificultad        
+    
+Tipo_Invalido:
     PRINTN ""
     PRINTN "Opcion invalida."
-    JMP ask_type
+    JMP Preguntar_Tipo
 
-ask_difficulty:
+Preguntar_Dificultad:
     PRINTN ""
     PRINT "Seleccione la dificultad (1=Facil, 2=Intermedio, 3=Dificil): "
     MOV AH, 01h
@@ -1264,19 +1381,19 @@ ask_difficulty:
     PUTC ' '
     SUB AL, '0'
     CMP AL, 1
-    JL invalid_difficulty
+    JL Dificultad_Invalida
     CMP AL, 3
-    JG invalid_difficulty
+    JG Dificultad_Invalida
     MOV dificultad, AL
-    JMP ask_mode  ;; --- MODIFICADO: Saltamos a preguntar el modo
+    JMP Preguntar_Modo  
 
-invalid_difficulty:
+Dificultad_Invalida:
     PRINTN ""
     PRINTN "Opcion invalida."
-    JMP ask_difficulty
+    JMP Preguntar_Dificultad
 
-;; --- (NUEVO) --- Preguntar por el modo de juego
-ask_mode:
+;___Preguntar por el modo de juego___
+Preguntar_Modo:
     PRINTN ""
     PRINT "Seleccione el modo (1=Por Tiempo, 2=Por Oportunidades): "
     MOV AH, 01h
@@ -1284,33 +1401,35 @@ ask_mode:
     PUTC ' '
     SUB AL, '0'
     CMP AL, 1
-    JL invalid_mode_response
+    JL Respuesta_Modo_Invalida
     CMP AL, 2
-    JG invalid_mode_response
+    JG Respuesta_Modo_Invalida
     MOV [modo_juego], AL
-    JMP config_done
+    JMP Configuracion_Completada
 
-invalid_mode_response:
+Respuesta_Modo_Invalida:
     PRINTN ""
     PRINTN "Opcion invalida."
-    JMP ask_mode
+    JMP Preguntar_Modo
     
-config_done:
+Configuracion_Completada:
     CMP [modo_juego], 1
-    JE init_tiempo
-    ;llamamos a la rutina de oportunidades 
+    JE Iniciar_Tiempo
+    ;se llama a la rutina de oportunidades 
     CALL Actualizar_Oportunidades_Iniciales
     JMP fin_config
     
-init_tiempo:
+Iniciar_Tiempo:
     CALL Actualizar_Tiempo_Inicial
 
 fin_config:
     PRINTN ""
     PRINTN "--- Configuracion guardada. Preparando el juego... ---"
     RET
-Configure_Game_Settings ENDP    
-
+Configurar_Ajustes_Juego ENDP    
+                
+;_________________________________________________________;                 
+                
 Actualizar_Tiempo_Inicial PROC NEAR
     PUSH AX
     PUSH BX
@@ -1325,8 +1444,10 @@ Actualizar_Tiempo_Inicial PROC NEAR
     POP AX
     RET
 Actualizar_Tiempo_Inicial ENDP
+        
+;_________________________________________________________;         
                       
-;Procedimiento para establecer las oportunidades iniciales
+;___Para establecer las oportunidades iniciales___
 Actualizar_Oportunidades_Iniciales PROC NEAR
     PUSH AX
     PUSH BX
@@ -1336,18 +1457,18 @@ Actualizar_Oportunidades_Iniciales PROC NEAR
     MOV AH, 0
     MOV BX, AX
     
-    ; Carga el número de oportunidades desde la tabla
-    MOV AL, [oportunidades_iniciales + BX]
+    MOV AL, [oportunidades_iniciales + BX]  ;Carga el número de oportunidades desde la tabla
     
-    ; Asigna las oportunidades a ambos jugadores
-    MOV [oportunidades_j1], AL
+    MOV [oportunidades_j1], AL  ;Asigna las oportunidades a ambos jugadores
     MOV [oportunidades_j2], AL
     
     POP BX
     POP AX
     RET
 Actualizar_Oportunidades_Iniciales ENDP                      
- 
+    
+;_________________________________________________________; 
+    
 Mostrar_Contador PROC NEAR
     PUSH CX
     PUSH DX
@@ -1371,7 +1492,9 @@ Mostrar_Contador PROC NEAR
     POP CX
     RET
 Mostrar_Contador ENDP  
-
+   
+;_________________________________________________________;    
+   
 Dibujar_Paleta_Colores PROC NEAR
     PUSH AX
     PUSH BX
@@ -1380,11 +1503,13 @@ Dibujar_Paleta_Colores PROC NEAR
     PUSH SI
     PUSH DI
     MOV SI, 0
-    MOV DH, 8
-draw_row:
+    MOV DH, 8 
+    
+Dibujar_Fila:
     MOV DI, 0
-    MOV DL, 20
-draw_col:
+    MOV DL, 20  
+    
+Dibujar_Columna:
     MOV AH, 02h
     MOV BH, 0
     INT 10h
@@ -1393,10 +1518,10 @@ draw_col:
     ADD DL, 5
     INC DI
     CMP DI, 5
-    JNE draw_col
+    JNE Dibujar_Columna
     ADD DH, 4
     CMP DH, 20
-    JNE draw_row
+    JNE Dibujar_Fila
     POP DI
     POP SI
     POP DX
@@ -1405,15 +1530,17 @@ draw_col:
     POP AX
     RET
 Dibujar_Paleta_Colores ENDP
-
+              
+;_________________________________________________________;               
+              
 Dibujar_Recuadro_Color PROC NEAR
     PUSH AX
     PUSH BX
     PUSH CX
     PUSH DX
     MOV BX, SI
-    MOV AL, [palette_chars + BX]
-    MOV BL, [color_palette + BX]
+    MOV AL, [paleta_caracteres + BX]
+    MOV BL, [paleta_colores + BX]
     PUSH DX
     INC DH
     ADD DL, 1
@@ -1429,7 +1556,9 @@ Dibujar_Recuadro_Color PROC NEAR
     POP AX
     RET
 Dibujar_Recuadro_Color ENDP
-
+                  
+;_________________________________________________________; 
+                  
 Dibujar_Paleta_Emojis PROC NEAR
     PUSH AX
     PUSH BX
@@ -1438,7 +1567,8 @@ Dibujar_Paleta_Emojis PROC NEAR
     PUSH SI
     PUSH DI
     MOV CX, NUM_EMOJIS 
-    MOV SI, 0          
+    MOV SI, 0  
+            
 emoji_grid_loop:
     PUSH CX
     MOV AX, SI      
@@ -1460,10 +1590,10 @@ emoji_grid_loop:
     PUSH SI         
     MOV BX, SI
     SHL BX, 1       
-    MOV DI, [emoji_pointers + BX]
+    MOV DI, [punteros_emojis + BX]
     PUSH DI
     POP SI          
-    CALL Print_Single_Emoji_From_SI
+    CALL Imprimir_Emoji
     POP SI          
     INC SI
     POP CX
@@ -1476,15 +1606,18 @@ emoji_grid_loop:
     POP AX
     RET
 Dibujar_Paleta_Emojis ENDP
-
+            
+;_________________________________________________________; 
+            
 Dibujar_Paleta_Numeros PROC NEAR
     PUSH AX
     PUSH BX
     PUSH CX
     PUSH SI
     MOV CX, 10      
-    MOV SI, 0       
-num_grid_loop:
+    MOV SI, 0   
+        
+bucle_numero_cuadricula:
     PUSH CX
     MOV AX, SI
     MOV BL, 5       
@@ -1503,18 +1636,20 @@ num_grid_loop:
     MOV BH, 0
     INT 10h
     MOV BX, SI
-    MOV AL, [_number_chars + BX]
+    MOV AL, [caracteres_numericos + BX]
     PUTC AL
     INC SI
     POP CX
-    LOOP num_grid_loop
+    LOOP bucle_numero_cuadricula
     POP SI
     POP CX
     POP BX
     POP AX
     RET
 Dibujar_Paleta_Numeros ENDP
-
+                            
+;_________________________________________________________;                             
+                            
 Dibujar_Botones_Menu PROC NEAR
     GOTOXY 15, 24
     PRINT "[ Rendirse ]"
@@ -1524,24 +1659,29 @@ Dibujar_Botones_Menu PROC NEAR
     PRINT "[ Quit ]"
     RET
 Dibujar_Botones_Menu ENDP
-
-Print_Buffer PROC NEAR
+              
+;_________________________________________________________;               
+              
+Imprimir_Buffer PROC NEAR
     PUSH AX
     PUSH CX
-    PUSH SI
-print_buffer_loop:
+    PUSH SI   
+    
+Imprimir_Buffer_loop:
     MOV AL, [SI]
     MOV AH, 0
     CALL PRINT_NUM_UNS
     PUTC ' '
     INC SI
-    LOOP print_buffer_loop
+    LOOP Imprimir_Buffer_loop
     POP SI
     POP CX
     POP AX
     RET
-Print_Buffer ENDP
-
+Imprimir_Buffer ENDP
+        
+;_________________________________________________________;         
+        
 CODIGO ENDS
 
 DEFINE_PRINT_STRING
